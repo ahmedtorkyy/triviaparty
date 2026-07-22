@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { PlayerProfile } from '../types';
 import { claimDailyBonus } from '../services/storage';
 import { Button } from '../components/ui/Button';
@@ -10,9 +10,6 @@ interface HomeScreenProps {
   onShowCharacterMaker: () => void;
   onCreateRoom: () => void;
   onJoinRoom: () => void;
-  onShowAvatarShop: () => void;
-  onShowChallenges: () => void;
-  onShowLeaderboard: () => void;
 }
 
 export function HomeScreen({
@@ -94,16 +91,12 @@ export function HomeScreen({
           🔑 Join Room
         </Button>
 
-        <Button onClick={onShowAvatarShop} variant="ghost" size="md" fullWidth>
+        <Button onClick={() => {}} variant="ghost" size="md" fullWidth disabled>
           🛒 Shop
         </Button>
 
-        <Button onClick={onShowChallenges} variant="ghost" size="md" fullWidth>
-          📜 Daily Challenges
-        </Button>
-
-        <Button onClick={onShowLeaderboard} variant="ghost" size="md" fullWidth>
-          🏆 Leaderboard
+        <Button onClick={() => {}} variant="ghost" size="md" fullWidth disabled>
+          👤 Profile
         </Button>
       </div>
     </div>

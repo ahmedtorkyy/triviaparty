@@ -48,53 +48,6 @@ export interface PlayerCharacter {
   backgroundColor: string;
 }
 
-/** Snapshot of a player's character for rendering */
-export interface PlayerCharacterSnapshot {
-  skinTone: string;
-  hairStyle: string;
-  hairColor: string;
-  backgroundColor: string;
-}
-
-/** Avatar definition */
-export interface Avatar {
-  id: string;
-  name: string;
-  cost: number;
-  svg: string; // SVG string or path
-  preview: string; // Preview image path
-}
-
-export interface Challenge {
-  id: string;
-  description: string;
-  reward: number;
-  predicate: (profile: PlayerProfile, gameStats?: {
-    correctCount: number;
-    wrongCount: number;
-    streak: number;
-    gameType: 'solo' | 'multiplayer';
-  }) => boolean;
-}
-
-export interface LeaderboardEntry {
-  playerId: string;
-  nickname: string;
-  coins: number;
-  correctAnswers: number;
-  gamesPlayed: number;
-  rank: number;
-}
-
-export interface PlayerStats {
-  totalCorrect: number;
-  totalWrong: number;
-  bestSurvivalStreak: number;
-  gamesPlayed: number;
-  multiplayerGames: number;
-  coinsEarned: number;
-}
-
 export interface PlayerProfile {
   nickname: string;
   character: PlayerCharacter;
@@ -102,10 +55,14 @@ export interface PlayerProfile {
   language: 'en' | 'ar';
   stats: PlayerStats;
   lastDailyBonus: string | null; // ISO date string
-  lastChallengeClaim: string | null; // ISO date string (UTC)
-  unlockedAvatars: string[]; // Avatar IDs
-  currentAvatar: string; // Avatar ID
   playerId: string;
+}
+
+export interface PlayerStats {
+  totalCorrect: number;
+  totalWrong: number;
+  bestSurvivalStreak: number;
+  gamesPlayed: number;
 }
 
 // ====== Power-ups ======
