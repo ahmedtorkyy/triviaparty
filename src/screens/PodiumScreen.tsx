@@ -4,31 +4,42 @@ import { Button } from '../components/ui/Button';
 interface PodiumScreenProps {
   entries: PodiumEntry[];
   players: RoomPlayer[];
+  isHost: boolean;
   onRematch: () => void;
   onLeave: () => void;
+  playerId: string;
+  myRank: number;
 }
 
-export function PodiumScreen({ entries, players, onRematch, onLeave }: PodiumScreenProps) {
-  const topThree = entries.slice(0, 3);
-  const rest = entries.slice(3);
+export function PodiumScreen({ entries, players, onRematch, onLeave, playerId, myRank }: PodiumScreenProps) {
+  const sorted = [...entries].sort((a, b) => a.rank - b.rank);
+  const topThree = sorted.filter((e) => e.rank <= 3);
+  const rest = sorted.filter((e) => e.rank > 3);
+  const myEntry = entries.find((e) => e.playerId === playerId);
 
   return (
     <div className="screen podium" role="main">
+      {/* SR-only announcement */}
+      <div className="sr-only" role="status" aria-live="assertive" aria-atomic="true">
+        Game over! You placed #{myRank} of {entries.length}.
+        {myEntry && ` You answered ${myEntry.correctCount} questions correctly.`}
+      </div>
+
       <h1 className="podium__title">Game Over!</h1>
 
-      {/* Podium places */}
+      {/* Top 3 */}
       <div className="podium__places" role="list" aria-label="Final standings">
-        {topThree.map((entry, i) => {
+        {topThree.map((entry) => {
           const player = players.find((p) => p.id === entry.playerId);
           const medals = ['🥇', '🥈', '🥉'];
           return (
             <div
               key={entry.playerId}
-              className={`podium__entry podium__entry--${i + 1}`}
+              className={`podium__entry podium__entry--${entry.rank}${entry.playerId === playerId ? ' podium__entry--me' : ''}`}
               role="listitem"
             >
               <span className="podium__medal" aria-hidden="true">
-                {medals[i]}
+                {medals[entry.rank - 1]}
               </span>
               <div className="podium__avatar" aria-hidden="true">
                 {player && (
@@ -46,33 +57,50 @@ export function PodiumScreen({ entries, players, onRematch, onLeave }: PodiumScr
                   </svg>
                 )}
               </div>
-              <span className="podium__name">{entry.nickname}</span>
+              <span className="podium__name">
+                {entry.nickname}
+                {entry.playerId === playerId && <span className="podium__me-badge" aria-label="You"> (You)</span>}
+              </span>
               <span className="podium__score">{entry.score} pts</span>
               <span className="podium__rank" aria-label={`Rank ${entry.rank}`}>
                 #{entry.rank}
+              </span>
+              <span className="podium__correct" aria-label={`${entry.correctCount} correct`}>
+                {entry.correctCount}/{entries[0]?.score > 0 ? Math.round(entries[0].score / 100) : 0} correct
               </span>
             </div>
           );
         })}
       </div>
 
-      {/* Rest of players */}
+      {/* Rest */}
       {rest.length > 0 && (
         <div className="podium__rest" role="list" aria-label="Other players">
           {rest.map((entry) => (
-            <div key={entry.playerId} className="podium__entry podium__entry--rest" role="listitem">
-              <span className="podium__name">{entry.nickname}</span>
+            <div key={entry.playerId} className={`podium__entry podium__entry--rest${entry.playerId === playerId ? ' podium__entry--me' : ''}`} role="listitem">
+              <span className="podium__name">
+                {entry.nickname}
+                {entry.playerId === playerId && <span className="podium__me-badge" aria-label="You"> (You)</span>}
+              </span>
               <span className="podium__score">{entry.score} pts</span>
               <span className="podium__rank">#{entry.rank}</span>
+              <span className="podium__correct">{entry.correctCount} correct</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Player's own stats */}
+      {myEntry && (
+        <div className="podium__my-stats" aria-label="Your results">
+          <p>You placed #{myEntry.rank} with {myEntry.score} points. {myEntry.correctCount} correct answers. +{myEntry.correctCount * 100} coins earned!</p>
         </div>
       )}
 
       {/* Actions */}
       <div className="podium__actions">
         <Button onClick={onRematch} variant="primary" size="lg" fullWidth>
-          🔄 Play Again
+          Play Again
         </Button>
         <Button onClick={onLeave} variant="ghost" size="md" fullWidth>
           Leave Room

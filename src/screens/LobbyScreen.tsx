@@ -3,7 +3,7 @@ import { Button } from '../components/ui/Button';
 
 interface LobbyScreenProps {
   code: string;
-  settings: RoomSettings;
+  settings: RoomSettings | null;
   players: RoomPlayer[];
   isHost: boolean;
   gameInProgress: boolean;
@@ -30,29 +30,36 @@ export function LobbyScreen({
         </div>
       </div>
 
-      {/* Settings summary */}
-      <div className="lobby__settings" aria-label="Room settings">
-        <div className="lobby__setting">
-          <span className="lobby__setting-label">Mode</span>
-          <span className="lobby__setting-value">{settings.mode === 'normal' ? 'Normal' : 'Survival'}</span>
+      {/* Settings summary — only shown to host (joiners get settings from game_start) */}
+      {settings && (
+        <div className="lobby__settings" aria-label="Room settings">
+          <div className="lobby__setting">
+            <span className="lobby__setting-label">Mode</span>
+            <span className="lobby__setting-value">{settings.mode === 'normal' ? 'Normal' : 'Survival'}</span>
+          </div>
+          <div className="lobby__setting">
+            <span className="lobby__setting-label">Questions</span>
+            <span className="lobby__setting-value">
+              {settings.mode === 'normal' ? settings.questionCount : '∞'}
+            </span>
+          </div>
+          <div className="lobby__setting">
+            <span className="lobby__setting-label">Timer</span>
+            <span className="lobby__setting-value">{settings.timerSeconds}s</span>
+          </div>
+          <div className="lobby__setting">
+            <span className="lobby__setting-label">Language</span>
+            <span className="lobby__setting-value">
+              {settings.questionLanguage === 'en' ? 'English' : 'العربية'}
+            </span>
+          </div>
         </div>
-        <div className="lobby__setting">
-          <span className="lobby__setting-label">Questions</span>
-          <span className="lobby__setting-value">
-            {settings.mode === 'normal' ? settings.questionCount : '∞'}
-          </span>
-        </div>
-        <div className="lobby__setting">
-          <span className="lobby__setting-label">Timer</span>
-          <span className="lobby__setting-value">{settings.timerSeconds}s</span>
-        </div>
-        <div className="lobby__setting">
-          <span className="lobby__setting-label">Language</span>
-          <span className="lobby__setting-value">
-            {settings.questionLanguage === 'en' ? 'English' : 'العربية'}
-          </span>
-        </div>
-      </div>
+      )}
+      {!settings && (
+        <p className="lobby__waiting-settings" role="status" aria-live="polite">
+          Waiting for room settings...
+        </p>
+      )}
 
       {/* Player list */}
       <div className="lobby__players" role="list" aria-label="Players in room">
@@ -85,7 +92,7 @@ export function LobbyScreen({
 
       {/* Actions */}
       <div className="lobby__actions">
-        {isHost && (
+        {isHost && settings && (
           <Button
             onClick={onStartGame}
             variant="primary"
@@ -95,6 +102,11 @@ export function LobbyScreen({
           >
             {gameInProgress ? 'Join Game' : 'Start Game'}
           </Button>
+        )}
+        {isHost && !settings && (
+          <p className="lobby__waiting" role="status" aria-live="polite">
+            Configuring room...
+          </p>
         )}
         {!isHost && (
           <p className="lobby__waiting" role="status" aria-live="polite">

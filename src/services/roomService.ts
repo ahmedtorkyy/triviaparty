@@ -5,8 +5,10 @@ import type {
   RoomSettings,
   RoomPlayer,
   PlayerAnswer,
-  QuestionResult,
+  RevealResult,
   PodiumEntry,
+  GameStartPayload,
+  StateSnapshotPayload,
 } from '../types/multiplayer';
 import type { TriviaQuestion } from '../types';
 
@@ -17,11 +19,13 @@ export interface RoomEventCallbacks {
   onPlayerLeave?: (playerId: string) => void;
   onHostChange?: (newHostId: string) => void;
   onPlayerAnswer?: (playerId: string, answer: string | null, timeMs: number) => void;
-  onGameStart?: (seed: string) => void;
+  onGameStart?: (payload: GameStartPayload) => void;
   onQuestion?: (question: TriviaQuestion, endTimestamp: number, questionIndex: number, totalQuestions: number) => void;
-  onReveal?: (results: QuestionResult, questionIndex: number) => void;
+  onReveal?: (results: RevealResult, questionIndex: number) => void;
   onPodium?: (entries: PodiumEntry[]) => void;
   onRematch?: (playerId: string) => void;
+  onStateRequest?: (playerId: string) => void;
+  onStateSnapshot?: (payload: StateSnapshotPayload) => void;
   onError?: (error: string) => void;
 }
 
@@ -48,7 +52,7 @@ export class RoomService {
   }
 
   // ---- Create a room ----
-  async create(settings: RoomSettings, player: RoomPlayer): Promise<string> {
+  async create(_settings: RoomSettings, player: RoomPlayer): Promise<string> {
     this.playerId = player.id;
     this.code = generateRoomCode();
 
@@ -73,29 +77,22 @@ export class RoomService {
       }
     });
 
-    // Store settings in channel metadata by broadcasting once
+    // Wait for subscription confirmation
     await new Promise<void>((resolve) => {
-      const checkSub = setInterval(() => {
+      const check = setInterval(() => {
         if (this._connected) {
-          clearInterval(checkSub);
-          // Broadcast settings so joining players get them
-          this.channel!.send({
-            type: 'broadcast',
-            event: 'room_settings',
-            payload: { settings },
-          });
+          clearInterval(check);
           resolve();
         }
       }, 100);
-      // Timeout after 5s
-      setTimeout(() => { clearInterval(checkSub); resolve(); }, 5000);
+      setTimeout(() => { clearInterval(check); resolve(); }, 5000);
     });
 
     return this.code;
   }
 
   // ---- Join a room ----
-  async join(code: string, player: RoomPlayer): Promise<boolean> {
+  async join(code: string, player: RoomPlayer): Promise<'ok' | 'not_found' | 'timeout'> {
     this.playerId = player.id;
     this.code = code.toUpperCase();
 
@@ -105,47 +102,71 @@ export class RoomService {
         presence: { key: player.id },
       },
     });
-
     return new Promise((resolve) => {
-      let resolved = false;
-      const timeout = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          this.leave();
-          resolve(false);
-        }
-      }, 5000);
+              let resolved = false;
+              let hostSeen = false;
+              let presenceCheck: ReturnType<typeof setInterval> | null = null;
+              const timeout = setTimeout(() => {
+                if (!resolved) {
+                  resolved = true;
+                  if (presenceCheck) clearInterval(presenceCheck);
+                  this.leave();
+                  resolve(hostSeen ? 'timeout' : 'not_found');
+                }
+              }, 4000); // 2s for host check + 2s buffer
 
-      this._setupChannel(player, false);
-      this.channel!.subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          // Try to fetch current settings
-          await this.channel!.track({
-            ...player,
-            isHost: false,
-            score: 0,
-            lives: 3,
-            isEliminated: false,
-            hasAnswered: false,
-          });
-          // The host should see us join via presence and send us the settings
-          // We'll receive them in the broadcast handler
-          if (!resolved) {
-            resolved = true;
-            clearTimeout(timeout);
-            this._connected = true;
-            resolve(true);
-          }
-        }
-        if (status === 'CHANNEL_ERROR') {
-          if (!resolved) {
-            resolved = true;
-            clearTimeout(timeout);
-            resolve(false);
-          }
-        }
-      });
-    });
+              // Poll for host presence (fires every 200ms)
+              presenceCheck = setInterval(() => {
+                if (!this.channel) return;
+                const state = this.channel.presenceState();
+                for (const [_id, presences] of Object.entries(state)) {
+                  const p = (presences as any[])[0];
+                  if (p?.isHost) {
+                    hostSeen = true;
+                    if (presenceCheck) clearInterval(presenceCheck);
+                    break;
+                  }
+                }
+              }, 200);
+
+              this._setupChannel(player, false);
+              this.channel!.subscribe(async (status) => {
+                if (status === 'SUBSCRIBED') {
+                  await this.channel!.track({
+                    ...player,
+                    isHost: false,
+                    score: 0,
+                    lives: 3,
+                    isEliminated: false,
+                    hasAnswered: false,
+                  });
+
+                  // Wait briefly for presence sync to show a host
+                  setTimeout(() => {
+                    if (!resolved) {
+                      resolved = true;
+                      clearTimeout(timeout);
+                      if (presenceCheck) clearInterval(presenceCheck);
+                      if (!hostSeen) {
+                        this.leave();
+                        resolve('not_found');
+                      } else {
+                        this._connected = true;
+                        resolve('ok');
+                      }
+                    }
+                  }, 2000);
+                }
+                if (status === 'CHANNEL_ERROR') {
+                  if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timeout);
+                    if (presenceCheck) clearInterval(presenceCheck);
+                    resolve('not_found');
+                  }
+                }
+              });
+            });
   }
 
   // ---- Leave ----
@@ -158,14 +179,20 @@ export class RoomService {
     this.code = '';
   }
 
+  // ---- Broadcaster check ----
+  private _ensureChannel() {
+    if (!this.channel) throw new Error('Not connected to a room');
+  }
+
   // ---- Host broadcasts ----
 
-  async startGame(seed: string) {
-    if (!this.channel) return;
-    await this.channel.send({
+  /** Broadcast game_start with full payload: settings, questions, startAt */
+  async startGame(payload: GameStartPayload) {
+    this._ensureChannel();
+    await this.channel!.send({
       type: 'broadcast',
       event: 'game_start',
-      payload: { seed },
+      payload,
     });
   }
 
@@ -175,17 +202,17 @@ export class RoomService {
     questionIndex: number,
     totalQuestions: number
   ) {
-    if (!this.channel) return;
-    await this.channel.send({
+    this._ensureChannel();
+    await this.channel!.send({
       type: 'broadcast',
       event: 'question',
       payload: { question, endTimestamp, questionIndex, totalQuestions },
     });
   }
 
-  async broadcastReveal(results: QuestionResult, questionIndex: number) {
-    if (!this.channel) return;
-    await this.channel.send({
+  async broadcastReveal(results: RevealResult, questionIndex: number) {
+    this._ensureChannel();
+    await this.channel!.send({
       type: 'broadcast',
       event: 'reveal',
       payload: { results, questionIndex },
@@ -193,8 +220,8 @@ export class RoomService {
   }
 
   async broadcastPodium(entries: PodiumEntry[]) {
-    if (!this.channel) return;
-    await this.channel.send({
+    this._ensureChannel();
+    await this.channel!.send({
       type: 'broadcast',
       event: 'podium',
       payload: { entries },
@@ -202,101 +229,74 @@ export class RoomService {
   }
 
   async broadcastRematch(playerId: string) {
-    if (!this.channel) return;
-    await this.channel.send({
+    this._ensureChannel();
+    await this.channel!.send({
       type: 'broadcast',
       event: 'rematch',
       payload: { playerId },
     });
   }
 
+  /** Conductor sends state_snapshot in reply to a state_request */
+  async sendStateSnapshot(payload: StateSnapshotPayload) {
+    this._ensureChannel();
+    await this.channel!.send({
+      type: 'broadcast',
+      event: 'state_snapshot',
+      payload,
+    });
+  }
+
+  /** Reconnecting player requests current state */
+  async requestStateSnapshot() {
+    this._ensureChannel();
+    await this.channel!.send({
+      type: 'broadcast',
+      event: 'state_request',
+      payload: { playerId: this.playerId },
+    });
+  }
+
   // ---- Player submits answer ----
   async submitAnswer(answer: PlayerAnswer) {
-    if (!this.channel) return;
-    await this.channel.send({
+    this._ensureChannel();
+    await this.channel!.send({
       type: 'broadcast',
       event: 'player_answer',
       payload: { playerId: this.playerId, answer: answer.answer, timeMs: answer.timeMs },
     });
   }
 
-  // ---- Update player presence (e.g. score changed) ----
+  // ---- Update player presence ----
   async updatePresence(updates: Partial<RoomPlayer>) {
-    if (!this.channel) return;
-    const currentPresence = this.channel.presenceState();
+    this._ensureChannel();
+    const currentPresence = this.channel!.presenceState();
     const myState = currentPresence[this.playerId];
     if (myState && myState.length > 0) {
-      await this.channel.track({ ...myState[0], ...updates });
+      await this.channel!.track({ ...myState[0], ...updates });
     }
   }
 
-  // ---- Fetch room settings (broadcast to all in channel) ----
-  async broadcastSettings(settings: RoomSettings) {
-    if (!this.channel) return;
-    await this.channel.send({
-      type: 'broadcast',
-      event: 'room_settings',
-      payload: { settings },
-    });
-  }
-
   // ---- Internal channel setup ----
-  private _setupChannel(player: RoomPlayer, _isHost: boolean) {
+  private _setupChannel(_player: RoomPlayer, _isHost: boolean) {
     if (!this.channel) return;
 
+    // Presence sync handler
     this.channel.on('presence', { event: 'sync' }, () => {
       this._connected = true;
-      const state = this.channel!.presenceState();
-      // Convert presence state to player list
-      const players: RoomPlayer[] = [];
-      let foundHost = false;
-      for (const [id, presences] of Object.entries(state)) {
-        if (presences.length > 0) {
-          const p = presences[0] as any;
-          players.push({
-            id,
-            nickname: p.nickname,
-            character: p.character,
-            isHost: p.isHost || (!foundHost && id === this.playerId),
-            score: p.score || 0,
-            lives: p.lives || 3,
-            isEliminated: p.isEliminated || false,
-            hasAnswered: p.hasAnswered || false,
-          });
-          if (p.isHost) foundHost = true;
-        }
-      }
-      // If no host found and we're the only player, we become host
-      if (!foundHost && players.length === 1 && players[0].id === this.playerId) {
-        players[0].isHost = true;
-        this.channel!.track({ ...player, isHost: true });
-      }
-      this.callbacks.onPlayerJoin?.(players[players.length - 1]);
+      // We do NOT promote players to host here — that's handled by the hook
+      // Presence sync is just for establishing connection
     });
 
-    this.channel.on('presence', { event: 'join' }, ({ key, newPresences }) => {
-      if (key !== this.playerId && newPresences.length > 0) {
-        const p = newPresences[0] as any;
-        this.callbacks.onPlayerJoin?.({
-          id: key,
-          nickname: p.nickname,
-          character: p.character,
-          isHost: p.isHost || false,
-          score: p.score || 0,
-          lives: p.lives || 3,
-          isEliminated: p.isEliminated || false,
-          hasAnswered: p.hasAnswered || false,
-        });
-      }
-    });
-
+    // Presence leave handler
     this.channel.on('presence', { event: 'leave' }, ({ key }) => {
       this.callbacks.onPlayerLeave?.(key);
     });
 
-    // Broadcast handlers
+    // ---- Broadcast handlers ----
+
     this.channel.on('broadcast', { event: 'game_start' }, ({ payload }) => {
-      this.callbacks.onGameStart?.(payload.seed);
+      this.callbacks.onGameStart?.(payload as GameStartPayload);
     });
 
     this.channel.on('broadcast', { event: 'question' }, ({ payload }) => {
@@ -320,8 +320,12 @@ export class RoomService {
       this.callbacks.onRematch?.(payload.playerId);
     });
 
-    this.channel.on('broadcast', { event: 'room_settings' }, (_payload) => {
-      // Settings broadcast is used internally
+    this.channel.on('broadcast', { event: 'state_request' }, ({ payload }) => {
+      this.callbacks.onStateRequest?.(payload.playerId);
+    });
+
+    this.channel.on('broadcast', { event: 'state_snapshot' }, ({ payload }) => {
+      this.callbacks.onStateSnapshot?.(payload);
     });
 
     this.channel.on('broadcast', { event: 'player_answer' }, ({ payload }) => {

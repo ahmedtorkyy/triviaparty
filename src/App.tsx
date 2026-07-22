@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import type { PlayerProfile } from './types';
 import type { RoomSettings, RoomPlayer, PlayerCharacterSnapshot } from './types/multiplayer';
 import { loadProfile, saveProfile } from './services/storage';
@@ -28,7 +28,9 @@ function App() {
   const [roomSettings, setRoomSettings] = useState<RoomSettings | null>(null);
   const [roomPlayers, setRoomPlayers] = useState<RoomPlayer[]>([]);
   const [isHost, setIsHost] = useState(false);
+  const [gameStarted, setGameStarted] = useState(false);
   const [playerCharacterSnapshot, setPlayerCharacterSnapshot] = useState<PlayerCharacterSnapshot | null>(null);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const roomService = getRoomService();
 
@@ -54,36 +56,19 @@ function App() {
     setScreen('home');
   };
 
-  // Refresh player list from presence
-  const refreshPlayers = useCallback(() => {
-    if (!roomService.isConnected) return;
-    const state = (roomService as any).channel?.presenceState();
-    if (!state) return;
-    const players: RoomPlayer[] = [];
-    let foundHost = false;
-    for (const [id, presences] of Object.entries(state)) {
-      if ((presences as any[]).length > 0) {
-        const p = (presences as any[])[0];
-        const isPlayerHost = p.isHost || (!foundHost && id === profile?.playerId);
-        players.push({
-          id,
-          nickname: p.nickname,
-          character: p.character,
-          isHost: isPlayerHost,
-          score: p.score || 0,
-          lives: p.lives || 3,
-          isEliminated: p.isEliminated || false,
-          hasAnswered: p.hasAnswered || false,
-        });
-        if (isPlayerHost) foundHost = true;
-      }
+  // Listen for rematch broadcasts to reset to lobby
+  useEffect(() => {
+    if (screen === 'mp_game') {
+      // The hook handles rematch internally and sets phase to lobby
+      // We just handle the screen transition back here
+      // The hook will set phase to lobby, and the game screen will show its lobby view
     }
-    setRoomPlayers(players);
-  }, [roomService, profile?.playerId]);
+  }, [screen]);
 
   // ---- Create Room ----
   const handleCreateRoom = () => {
     setScreen('create_room');
+    setJoinError(null);
   };
 
   const handleRoomCreated = async (settings: RoomSettings) => {
@@ -112,6 +97,7 @@ function App() {
       setRoomCode(code);
       setRoomSettings(settings);
       setIsHost(true);
+      setGameStarted(false);
       setRoomPlayers([
         {
           id: profile.playerId,
@@ -134,10 +120,13 @@ function App() {
   // ---- Join Room ----
   const handleJoinRoom = () => {
     setScreen('join_room');
+    setJoinError(null);
   };
 
   const handleRoomJoined = async (code: string) => {
     if (!profile) return;
+    setJoinError(null);
+
     const snapshot: PlayerCharacterSnapshot = {
       skinTone: profile.character.skinTone,
       hairStyle: profile.character.hairStyle,
@@ -149,7 +138,7 @@ function App() {
     setPlayerCharacterSnapshot(snapshot);
 
     try {
-      const joined = await roomService.join(code, {
+      const result = await roomService.join(code, {
         id: profile.playerId,
         nickname: profile.nickname,
         character: snapshot,
@@ -159,17 +148,22 @@ function App() {
         isEliminated: false,
         hasAnswered: false,
       });
-      if (!joined) {
-        console.error('Room not found');
+
+      if (result === 'not_found') {
+        setJoinError('Room not found. Check the code and try again.');
         return;
       }
+      if (result === 'timeout') {
+        setJoinError('Could not connect to the room. Try again.');
+        return;
+      }
+
       setRoomCode(code);
       setIsHost(false);
-      // Players will populate via presence sync
+      setRoomSettings(null); // Joiners get settings from game_start broadcast
+      setGameStarted(false);
+      setRoomPlayers([]); // Populated via presence sync in the hook
       setScreen('lobby');
-
-      // Set a timer to refresh players after joining (presence sync takes a moment)
-      setTimeout(refreshPlayers, 1500);
     } catch (err) {
       console.error('Failed to join room:', err);
       setScreen('home');
@@ -177,14 +171,6 @@ function App() {
   };
 
   // ---- Lobby ----
-  useEffect(() => {
-    if (screen === 'lobby') {
-      // Poll for presence sync
-      const interval = setInterval(refreshPlayers, 2000);
-      return () => clearInterval(interval);
-    }
-  }, [screen, refreshPlayers]);
-
   const handleStartGame = () => {
     setScreen('mp_game');
   };
@@ -195,6 +181,7 @@ function App() {
     setRoomSettings(null);
     setRoomPlayers([]);
     setIsHost(false);
+    setGameStarted(false);
     setScreen('home');
   };
 
@@ -204,6 +191,7 @@ function App() {
     setRoomSettings(null);
     setRoomPlayers([]);
     setIsHost(false);
+    setGameStarted(false);
     setScreen('home');
   };
 
@@ -257,22 +245,23 @@ function App() {
         <JoinRoomScreen
           onJoin={handleRoomJoined}
           onBack={() => setScreen('home')}
+          error={joinError}
         />
       )}
 
-      {screen === 'lobby' && roomSettings && (
+      {screen === 'lobby' && (
         <LobbyScreen
           code={roomCode}
           settings={roomSettings}
           players={roomPlayers}
           isHost={isHost}
-          gameInProgress={false}
+          gameInProgress={gameStarted}
           onStartGame={handleStartGame}
           onLeave={handleLeaveRoom}
         />
       )}
 
-      {screen === 'mp_game' && roomSettings && playerCharacterSnapshot && (
+      {screen === 'mp_game' && playerCharacterSnapshot && (
         <MultiplayerGameScreen
           playerId={profile.playerId}
           playerNickname={profile.nickname}
@@ -281,6 +270,10 @@ function App() {
           isHost={isHost}
           roomCode={roomCode}
           onLeave={handleLeaveGame}
+          onBackToLobby={() => {
+            setGameStarted(false);
+            setScreen('lobby');
+          }}
         />
       )}
     </div>

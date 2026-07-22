@@ -4,6 +4,8 @@ interface RevealScreenProps {
   isCorrect: boolean | null;
   correctAnswer: string;
   answer: AnswerRecord;
+  pointsEarned?: number;
+  cumulativeScore?: number;
   onNext: () => void;
   isLastQuestion: boolean;
 }
@@ -12,12 +14,16 @@ export function RevealScreen({
   isCorrect,
   correctAnswer,
   answer,
+  pointsEarned,
+  cumulativeScore,
   onNext,
   isLastQuestion,
 }: RevealScreenProps) {
   const speedBonus = answer.isCorrect
     ? Math.max(0, Math.floor((1 - answer.timeMs / (15 * 1000)) * 100))
     : 0;
+
+  const totalEarned = pointsEarned ?? (isCorrect ? 100 + speedBonus : 0);
 
   return (
     <div className="reveal-screen">
@@ -34,15 +40,21 @@ export function RevealScreen({
         <strong>The correct answer:</strong> {correctAnswer}
       </p>
 
+      <p className="reveal-screen__points">
+        +{totalEarned} points this question
+      </p>
+
+      {cumulativeScore !== undefined && (
+        <p className="reveal-screen__cumulative">
+          Total: {cumulativeScore} points
+        </p>
+      )}
+
       {isCorrect && speedBonus > 0 && (
         <p className="reveal-screen__bonus">
           Speed bonus: +{speedBonus} pts
         </p>
       )}
-
-      <p className="reveal-screen__points">
-        {isCorrect ? `+${100 + speedBonus} points` : '+0 points'}
-      </p>
 
       <button className="tp-button tp-button--primary tp-button--lg reveal-screen__next" onClick={onNext}>
         {isLastQuestion ? 'See Results' : 'Next Question'}

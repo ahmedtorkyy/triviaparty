@@ -4,66 +4,64 @@ import { Button } from '../components/ui/Button';
 interface JoinRoomScreenProps {
   onJoin: (code: string) => void;
   onBack: () => void;
+  error?: string | null;
 }
 
-export function JoinRoomScreen({ onJoin, onBack }: JoinRoomScreenProps) {
+export function JoinRoomScreen({ onJoin, onBack, error }: JoinRoomScreenProps) {
   const [code, setCode] = useState('');
-  const [error, setError] = useState('');
 
-  const handleJoin = () => {
-    const trimmed = code.trim().toUpperCase();
-    if (trimmed.length !== 4 || !/^[A-Z]+$/.test(trimmed)) {
-      setError('Enter a 4-letter room code');
-      return;
+  const handleSubmit = () => {
+    if (code.trim().length >= 4) {
+      onJoin(code.trim().toUpperCase());
     }
-    onJoin(trimmed);
   };
 
   return (
     <div className="screen join-room">
       <h1 className="join-room__title">Join Room</h1>
 
-      <div className="join-room__input-group">
+      <div className="join-room__form">
         <label htmlFor="room-code" className="join-room__label">
-          Room Code
+          Enter Room Code
         </label>
         <input
           id="room-code"
           type="text"
           className="join-room__input"
-          value={code}
-          onChange={(e) => {
-            setCode(e.target.value.toUpperCase());
-            setError('');
-          }}
           placeholder="e.g. ABCD"
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 4))}
           maxLength={4}
+          autoComplete="off"
           autoFocus
-          aria-describedby={error ? 'room-error' : undefined}
+          aria-describedby={error ? 'join-error' : undefined}
         />
-        {error && (
-          <span id="room-error" className="join-room__error" role="alert">
-            {error}
-          </span>
-        )}
-        <span className="join-room__hint">
-          Ask the host for the 4-letter room code
-        </span>
-      </div>
 
-      <div className="join-room__actions">
-        <Button
-          onClick={handleJoin}
-          variant="primary"
-          size="lg"
-          fullWidth
-          disabled={code.trim().length !== 4}
-        >
-          Join
-        </Button>
-        <Button onClick={onBack} variant="ghost" size="md" fullWidth>
-          Back
-        </Button>
+        {error && (
+          <p id="join-error" className="join-room__error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <div className="join-room__actions">
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            disabled={code.trim().length < 4}
+            onClick={handleSubmit}
+          >
+            Join
+          </Button>
+          <Button
+            variant="ghost"
+            size="md"
+            fullWidth
+            onClick={onBack}
+          >
+            Back
+          </Button>
+        </div>
       </div>
     </div>
   );

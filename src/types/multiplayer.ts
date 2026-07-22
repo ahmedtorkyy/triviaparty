@@ -73,11 +73,46 @@ export interface PlayerAnswer {
   timeMs: number;
 }
 
-export interface QuestionResult {
+/** 
+ * Reveal payload — SINGLE source of truth for scores.
+ * EVERY client (including host) applies scores from this payload.
+ */
+export interface RevealResult {
   questionId: string;
   correctAnswer: string;
+  /** Count of each answer choice, keyed by answer text */
+  answerCounts: Record<string, number>;
+  /** Each player's answer for this question */
   playerAnswers: PlayerAnswer[];
-  pointsMap: Record<string, number>;
+  /** Points earned THIS QUESTION by each player (100 base + speed bonus 0–100) */
+  pointsEarned: Record<string, number>;
+  /** Each player's CUMULATIVE total after this question */
+  cumulativeScores: Record<string, number>;
+}
+
+/**
+ * game_start broadcast payload — carries everything a client needs.
+ * No more seed-only start.
+ */
+export interface GameStartPayload {
+  settings: RoomSettings;
+  questions: import('../types').TriviaQuestion[];
+  /** Timestamp (ms) when countdown ends and first question should appear */
+  startAt: number;
+}
+
+/**
+ * state_snapshot broadcast payload — for reconnecting players.
+ */
+export interface StateSnapshotPayload {
+  currentIndex: number;
+  endsAt: number;
+  phase: 'question' | 'reveal';
+  correctAnswer?: string;
+  answerCounts?: Record<string, number>;
+  playerAnswers?: PlayerAnswer[];
+  pointsEarned?: Record<string, number>;
+  cumulativeScores: Record<string, number>;
 }
 
 export interface PodiumEntry {
@@ -85,4 +120,15 @@ export interface PodiumEntry {
   nickname: string;
   score: number;
   rank: number;
+  /** Number of correct answers this player got */
+  correctCount: number;
+}
+
+// Conductor = the player who advances the game (host initially, falls through on disconnect)
+export function computeConductorId(players: RoomPlayer[]): string | null {
+  if (players.length === 0) return null;
+  const host = players.find((p) => p.isHost);
+  if (host) return host.id;
+  // No host found — alphabetically first player ID
+  return [...players].sort((a, b) => a.id.localeCompare(b.id))[0].id;
 }
