@@ -16,6 +16,7 @@ export interface RoomEventCallbacks {
   onPlayerJoin?: (player: RoomPlayer) => void;
   onPlayerLeave?: (playerId: string) => void;
   onHostChange?: (newHostId: string) => void;
+  onPlayerAnswer?: (playerId: string, answer: string | null, timeMs: number) => void;
   onGameStart?: (seed: string) => void;
   onQuestion?: (question: TriviaQuestion, endTimestamp: number, questionIndex: number, totalQuestions: number) => void;
   onReveal?: (results: QuestionResult, questionIndex: number) => void;
@@ -320,8 +321,11 @@ export class RoomService {
     });
 
     this.channel.on('broadcast', { event: 'room_settings' }, (_payload) => {
-      // Settings broadcast is used internally; could be used for incoming players
-      // Store settings in a local variable if needed
+      // Settings broadcast is used internally
+    });
+
+    this.channel.on('broadcast', { event: 'player_answer' }, ({ payload }) => {
+      this.callbacks.onPlayerAnswer?.(payload.playerId, payload.answer, payload.timeMs);
     });
   }
 }

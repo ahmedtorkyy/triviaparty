@@ -61,6 +61,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const endTimestampRef = useRef<number>(0);
   const answerTimestampsRef = useRef<Map<string, number>>(new Map());
+  const playerAnswersRef = useRef<Map<string, string | null>>(new Map());
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -114,6 +115,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
 
         const endTs = Date.now() + options.settings.timerSeconds * 1000;
         answerTimestampsRef.current = new Map();
+        playerAnswersRef.current = new Map();
         startCountdown(endTs);
         roomService.broadcastQuestion(q, endTs, 0, count);
       }
@@ -165,6 +167,10 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
           }
           return [...prev, player];
         });
+      },
+      onPlayerAnswer(playerId, answer, timeMs) {
+        answerTimestampsRef.current.set(playerId, timeMs);
+        playerAnswersRef.current.set(playerId, answer);
       },
       onPlayerLeave(playerId) {
         setPlayers((prev) => prev.filter((p) => p.id !== playerId));
@@ -239,6 +245,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
 
         const endTs = Date.now() + options.settings.timerSeconds * 1000;
         answerTimestampsRef.current = new Map();
+        playerAnswersRef.current = new Map();
         startCountdown(endTs);
         roomService.broadcastQuestion(q, endTs, nextIndex, totalQuestions);
       }
@@ -264,19 +271,18 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         pointsMap: {},
       };
 
-      // For each player answer we received, fill in
+      // Use actual player answers
       const answerMap = answerTimestampsRef.current;
+      const ansRef = playerAnswersRef.current;
       const scores: Record<string, number> = {};
       for (const p of players) {
-        const ansTime = answerMap.get(p.id);
-        const isAnsCorrect = ansTime !== undefined;
-        // We don't actually know what they answered from the player_answer broadcast alone
-        // This is where the host needs the actual answers
-        // For now, assume correct if they answered in time
+        const playerAnswer = ansRef.get(p.id) || null;
+        const ansTime = answerMap.get(p.id) || options.settings.timerSeconds * 1000;
+        const isAnsCorrect = playerAnswer === currentQuestion?.correctAnswer;
         scores[p.id] = isAnsCorrect ? 100 : 0;
         results.playerAnswers = results.playerAnswers.map((pa) =>
           pa.playerId === p.id
-            ? { ...pa, answer: isAnsCorrect && currentQuestion ? currentQuestion.correctAnswer : null }
+            ? { ...pa, answer: playerAnswer, timeMs: ansTime }
             : pa
         );
       }
