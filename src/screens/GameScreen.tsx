@@ -1,7 +1,8 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSoloGame } from '../hooks/useSoloGame';
 import type { PlayerProfile } from '../types';
 import { updateStats } from '../services/storage';
+import { CATEGORIES, CATEGORY_ANY } from '../services/triviaApi';
 import { TimerRing } from '../components/ui/TimerRing';
 import { QuestionCard } from '../components/game/QuestionCard';
 import { GameHud } from '../components/game/GameHud';
@@ -19,12 +20,9 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
   const [showReveal, setShowReveal] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [announcement, setAnnouncement] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('any');
   const prevPhaseRef = useRef(game.phase);
-
-  // Start game on mount
-  useEffect(() => {
-    game.startGame();
-  }, []);
+  const announcementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Track phase changes for accessibility and reveal
   useEffect(() => {
@@ -57,18 +55,30 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
         game.bestStreak
       );
       onProfileChange(updated);
-      setAnnouncement(`Game over! You scored ${game.score} points.`);
+      setAnnouncement(`Game over! You scored ${game.score} points. Best streak: ${game.bestStreak}.`);
     }
   }, [game.phase]);
 
-  // Handle advance
-  const handleNext = () => {
-    if (game.lives <= 0 || game.currentIndex >= game.totalQuestions - 1) {
-      game.advanceQuestion(); // Triggers result phase
-    } else {
-      game.advanceQuestion();
+  // Clear stale announcements
+  useEffect(() => {
+    if (announcement) {
+      if (announcementTimeoutRef.current) {
+        clearTimeout(announcementTimeoutRef.current);
+      }
+      announcementTimeoutRef.current = setTimeout(() => setAnnouncement(''), 5000);
     }
-  };
+    return () => {
+      if (announcementTimeoutRef.current) clearTimeout(announcementTimeoutRef.current);
+    };
+  }, [announcement]);
+
+  const handleStart = useCallback(() => {
+    game.startGame(selectedCategory === 'any' ? undefined : selectedCategory);
+  }, [game, selectedCategory]);
+
+  const handleNext = useCallback(() => {
+    game.advanceQuestion();
+  }, [game]);
 
   // Loading state
   if (game.loading) {
@@ -88,7 +98,7 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
       <div className="screen game-screen">
         <div className="game-screen__error" role="alert">
           <p>{game.error}</p>
-          <Button onClick={() => game.startGame()} variant="primary" size="lg">
+          <Button onClick={handleStart} variant="primary" size="lg">
             Retry
           </Button>
           <Button onClick={onBack} variant="ghost" size="md">
@@ -99,18 +109,54 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
     );
   }
 
-  // Idle state (before game starts)
+  // Idle state (before game starts) — show category picker
   if (game.phase === 'idle') {
     return (
       <div className="screen game-screen game-screen--ready">
         <div className="game-screen__ready">
-          <h2>Solo Survival</h2>
-          <p>Answer questions until you get 3 wrong.</p>
-          <p>Beat your personal best streak!</p>
-          <Button onClick={() => game.startGame()} variant="primary" size="lg">
+          <div className="game-ready__icon" aria-hidden="true">🎯</div>
+          <h2 className="game-ready__title">Solo Survival</h2>
+          <p className="game-ready__desc">
+            Answer questions until you get <strong>3 wrong</strong>.
+            <br />Survive as long as you can!
+          </p>
+
+          <div className="game-ready__rules">
+            <div className="game-ready__rule">
+              <span aria-hidden="true">⚡</span> Speed bonus up to +100 points
+            </div>
+            <div className="game-ready__rule">
+              <span aria-hidden="true">🔥</span> Build your streak for bragging rights
+            </div>
+            <div className="game-ready__rule">
+              <span aria-hidden="true">🪙</span> Earn 50 coins per correct answer
+            </div>
+          </div>
+
+          {/* Category selector */}
+          <div className="game-ready__category">
+            <label htmlFor="category-select" className="game-ready__category-label">
+              Question Category
+            </label>
+            <select
+              id="category-select"
+              className="game-ready__category-select"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+            >
+              <option value={CATEGORY_ANY.id}>{CATEGORY_ANY.name}</option>
+              {CATEGORIES.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <Button onClick={handleStart} variant="primary" size="lg" fullWidth>
             Start Game
           </Button>
-          <Button onClick={onBack} variant="ghost" size="md">
+          <Button onClick={onBack} variant="ghost" size="md" fullWidth>
             Back
           </Button>
         </div>
@@ -162,11 +208,14 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
 
           <div className="result-screen__streak">
             <span className="result-screen__streak-label">Best Streak</span>
-            <span className="result-screen__streak-value">{game.bestStreak} {game.bestStreak >= profile.stats.bestSurvivalStreak ? '🔥' : ''}</span>
+            <span className="result-screen__streak-value">
+              {game.bestStreak}
+              {game.bestStreak > (profile.stats.bestSurvivalStreak - (profile.stats.gamesPlayed > 0 ? 0 : 0)) ? ' 🔥' : ''}
+            </span>
           </div>
 
           <div className="result-screen__actions">
-            <Button onClick={() => game.startGame()} variant="primary" size="lg" fullWidth>
+            <Button onClick={handleStart} variant="primary" size="lg" fullWidth>
               Play Again
             </Button>
             <Button onClick={onBack} variant="ghost" size="md" fullWidth>

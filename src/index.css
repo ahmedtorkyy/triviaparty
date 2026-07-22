@@ -468,6 +468,107 @@ body {
   margin-top: var(--space-sm);
 }
 
+/* ====== GAME READY SCREEN ====== */
+.game-screen--ready {
+  justify-content: center;
+  min-height: 80dvh;
+}
+
+.game-screen__ready {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  align-items: center;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.game-ready__icon {
+  font-size: 3rem;
+}
+
+.game-ready__title {
+  font-family: var(--font-title);
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--color-accent);
+}
+
+.game-ready__desc {
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.game-ready__desc strong {
+  color: var(--color-wrong);
+}
+
+.game-ready__rules {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  text-align: left;
+}
+
+.game-ready__rule {
+  background: var(--color-bg-card);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.game-ready__category {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  text-align: left;
+}
+
+.game-ready__category-label {
+  font-family: var(--font-title);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.game-ready__category-select {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-bg-elevated);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394A3B8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.game-ready__category-select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-glow);
+}
+
+.game-ready__category-select option {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
 /* ====== GAME SCREEN ====== */
 .game-screen {
   display: flex;
