@@ -194,11 +194,13 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
       activeSettingsRef.current = options.settings;
 
       // Broadcast full payload (roomService.startGame also updates conductor presence)
-      roomService.startGame({
+      await roomService.startGame({
         settings: options.settings,
         questions: qs,
         startAt,
       } as GameStartPayload);
+      // Conductor updates presence: gameRunning = true, settings
+      roomService.updatePresence({ gameRunning: true, settings: options.settings });
     } catch (err) {
       console.error('Failed to start game:', err);
     }
@@ -334,6 +336,8 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
           };
         });
         roomService.broadcastPodium(entries);
+        // Conductor updates presence: gameRunning = false
+        roomService.updatePresence({ gameRunning: false });
         return;
       }
 
@@ -467,10 +471,9 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
           }
         }, remaining);
       },
-
       onQuestion(question, endTimestamp, qIndex, total) {
         // SPECTATOR GUARD: ignore question broadcasts while spectating
-        if (isSpectatingRef.current && !isLateJoiner) return;
+        if (isSpectatingRef.current) return;
 
         // Clear any countdown timer from game_start
         setCurrentQuestion(question);
@@ -490,7 +493,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
 
       onReveal(results) {
         // SPECTATOR GUARD: ignore reveal broadcasts while spectating
-        if (isSpectatingRef.current && !isLateJoiner) return;
+        if (isSpectatingRef.current) return;
 
         clearTimer();
         revealSentRef.current = true;
@@ -577,6 +580,8 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         isSpectatingRef.current = false;
         lastRevealRef.current = null;
         // Keep players — they stay in the room
+        // Conductor updates presence: gameRunning = false
+        roomService.updatePresence({ gameRunning: false });
       },
 
       onStateRequest(_requestingPlayerId) {
@@ -644,10 +649,13 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
           setTotalQuestions(payload.questions.length);
         }
 
-        // If we were a late joiner and now have state, we're caught up
-        setIsLateJoiner(false);
-        isSpectatingRef.current = false;
-        snapshotRequestedRef.current = false;
+        // If we were a late joiner and now have state, check if we are a returning player
+        // Only clear spectating flags if payload.cumulativeScores contains my playerId
+        if (payload.cumulativeScores[options.playerId] !== undefined) {
+          setIsLateJoiner(false);
+          isSpectatingRef.current = false;
+          snapshotRequestedRef.current = false;
+        }
 
         // Set phase
         if (payload.phase === 'question') {
@@ -696,6 +704,17 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   useEffect(() => {
     return () => clearTimer();
   }, [clearTimer]);
+
+  // ========== Conductor promotion ==========
+  useEffect(() => {
+    if (computeIsConductor()) {
+      // If we just became conductor, update presence with gameRunning and settings
+      // This ensures a promoted host in the lobby has settings, and a promoted conductor mid-game has gameRunning
+      const isGameRunning = phase === 'question' || phase === 'reveal';
+      const settings = activeSettingsRef.current;
+      roomService.updatePresence({ gameRunning: isGameRunning, settings });
+    }
+  }, [computeIsConductor, phase, roomService]);
 
   const isConductor = computeIsConductor();
 
