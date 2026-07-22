@@ -1,5 +1,9 @@
+import { useEffect } from 'react';
 import type { PodiumEntry, RoomPlayer } from '../types/multiplayer';
+import type { PlayerProfile } from '../types';
 import { Button } from '../components/ui/Button';
+import { updateLeaderboard } from '../services/leaderboardService';
+import { updateLeaderboard } from '../services/leaderboardService';
 
 interface PodiumScreenProps {
   entries: PodiumEntry[];
@@ -9,13 +13,51 @@ interface PodiumScreenProps {
   playerId: string;
   myRank: number;
   totalQuestions: number;
+  profile: PlayerProfile;
+  onProfileChange: (updated: PlayerProfile) => void;
 }
 
-export function PodiumScreen({ entries, players, onRematch, onLeave, playerId, myRank, totalQuestions }: PodiumScreenProps) {
+export function PodiumScreen({
+  entries,
+  players,
+  onRematch,
+  onLeave,
+  playerId,
+  myRank,
+  totalQuestions,
+  profile,
+  onProfileChange,
+}: PodiumScreenProps) {
   const sorted = [...entries].sort((a, b) => a.rank - b.rank);
   const topThree = sorted.filter((e) => e.rank <= 3);
   const rest = sorted.filter((e) => e.rank > 3);
   const myEntry = entries.find((e) => e.playerId === playerId);
+
+  // Award coins and update profile on mount
+  useEffect(() => {
+    if (!myEntry) return;
+
+    const coinsEarned = myEntry.correctCount * 100;
+    const updatedProfile = { ...profile };
+    updatedProfile.coins += coinsEarned;
+    updatedProfile.stats.coinsEarned += coinsEarned;
+    updatedProfile.stats.gamesPlayed += 1;
+    updatedProfile.stats.multiplayerGames += 1;
+    updatedProfile.stats.totalCorrect += myEntry.correctCount;
+    updatedProfile.stats.totalWrong += totalQuestions - myEntry.correctCount;
+
+    // Claim daily challenges
+    const { profile: challengedProfile } = claimChallenges(updatedProfile, {
+      correctCount: myEntry.correctCount,
+      wrongCount: totalQuestions - myEntry.correctCount,
+      streak: 0, // Streak not tracked in multiplayer
+      gameType: 'multiplayer',
+    });
+
+    onProfileChange(challengedProfile);
+    // Update leaderboard
+    updateLeaderboard(playerId, profile.nickname, coinsEarned, myEntry.correctCount, 1);
+  }, [entries, playerId, profile, onProfileChange, totalQuestions]);
 
   return (
     <div className="screen podium" role="main">
@@ -66,8 +108,8 @@ export function PodiumScreen({ entries, players, onRematch, onLeave, playerId, m
                 #{entry.rank}
               </span>
               <span className="podium__correct" aria-label={`${entry.correctCount} correct out of ${totalQuestions}`}>
-                              {entry.correctCount}/{totalQuestions} correct
-                            </span>
+                {entry.correctCount}/{totalQuestions} correct
+              </span>
             </div>
           );
         })}

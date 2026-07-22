@@ -26,8 +26,13 @@ export function createDefaultProfile(): PlayerProfile {
       totalWrong: 0,
       bestSurvivalStreak: 0,
       gamesPlayed: 0,
+      multiplayerGames: 0,
+      coinsEarned: 0,
     },
     lastDailyBonus: null,
+    lastChallengeClaim: null,
+    unlockedAvatars: ['default'],
+    currentAvatar: 'default',
     playerId: generatePlayerId(),
   };
 }
@@ -40,7 +45,13 @@ export function loadProfile(): PlayerProfile {
       saveProfile(profile);
       return profile;
     }
-    return JSON.parse(raw) as PlayerProfile;
+    const parsed = JSON.parse(raw);
+    return {
+      ...createDefaultProfile(),
+      ...parsed,
+      stats: { ...createDefaultProfile().stats, ...parsed.stats },
+      character: { ...DEFAULT_CHARACTER, ...parsed.character },
+    };
   } catch {
     return createDefaultProfile();
   }
@@ -74,10 +85,12 @@ export function updateStats(
   const updated: PlayerProfile = {
     ...profile,
     stats: {
+      ...profile.stats,
       totalCorrect: profile.stats.totalCorrect + correct,
       totalWrong: profile.stats.totalWrong + wrong,
       bestSurvivalStreak: Math.max(profile.stats.bestSurvivalStreak, streak),
       gamesPlayed: profile.stats.gamesPlayed + 1,
+      coinsEarned: profile.stats.coinsEarned + correct * 50,
     },
     coins: profile.coins + correct * 50, // Solo earns half rate: 50 coins per correct
   };

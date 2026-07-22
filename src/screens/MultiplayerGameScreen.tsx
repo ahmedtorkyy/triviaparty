@@ -137,6 +137,8 @@ export function MultiplayerGameScreen({
         playerId={playerId}
         myRank={state.myPodiumRank}
         totalQuestions={state.totalQuestions}
+        profile={profile}
+        onProfileChange={onProfileChange}
       />
     );
   }

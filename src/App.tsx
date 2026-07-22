@@ -10,6 +10,9 @@ import { CreateRoomScreen } from './screens/CreateRoomScreen';
 import { JoinRoomScreen } from './screens/JoinRoomScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { MultiplayerGameScreen } from './screens/MultiplayerGameScreen';
+import { AvatarShopScreen } from './screens/AvatarShopScreen';
+import { ChallengesScreen } from './screens/ChallengesScreen';
+import { LeaderboardScreen } from './screens/LeaderboardScreen';
 
 type AppScreen =
   | 'loading'
@@ -19,7 +22,10 @@ type AppScreen =
   | 'create_room'
   | 'join_room'
   | 'lobby'
-  | 'mp_game';
+  | 'mp_game'
+  | 'avatar_shop'
+  | 'challenges'
+  | 'leaderboard';
 
 function App() {
   const [screen, setScreen] = useState<AppScreen>('loading');
@@ -229,6 +235,9 @@ function App() {
           onShowCharacterMaker={() => setScreen('character')}
           onCreateRoom={handleCreateRoom}
           onJoinRoom={handleJoinRoom}
+          onShowAvatarShop={() => setScreen('avatar_shop')}
+          onShowChallenges={() => setScreen('challenges')}
+          onShowLeaderboard={() => setScreen('leaderboard')}
         />
       )}
 
@@ -286,6 +295,52 @@ function App() {
           }}
           onProfileChange={handleProfileChange}
           profile={profile}
+        />
+      )}
+
+      {screen === 'avatar_shop' && (
+        <AvatarShopScreen
+          profile={profile}
+          onProfileChange={handleProfileChange}
+          onBack={() => setScreen('home')}
+        />
+      )}
+
+      {screen === 'challenges' && (
+        <ChallengesScreen
+          profile={profile}
+          onProfileChange={handleProfileChange}
+          onBack={() => setScreen('home')}
+        />
+      )}
+
+      {screen === 'leaderboard' && (
+        <LeaderboardScreen
+          profile={profile}
+          onBack={() => setScreen('home')}
+        />
+      )}
+
+      {screen === 'avatar_shop' && (
+        <AvatarShopScreen
+          profile={profile}
+          onProfileChange={handleProfileChange}
+          onBack={() => setScreen('home')}
+        />
+      )}
+
+      {screen === 'challenges' && (
+        <ChallengesScreen
+          profile={profile}
+          onProfileChange={handleProfileChange}
+          onBack={() => setScreen('home')}
+        />
+      )}
+
+      {screen === 'leaderboard' && (
+        <LeaderboardScreen
+          profile={profile}
+          onBack={() => setScreen('home')}
         />
       )}
     </div>
