@@ -132,11 +132,11 @@ export function MultiplayerGameScreen({
       <PodiumScreen
         entries={state.podiumEntries}
         players={state.players}
-        isHost={state.isConductor}
         onRematch={handleRematch}
         onLeave={handleLeave}
         playerId={playerId}
         myRank={state.myPodiumRank}
+        totalQuestions={state.totalQuestions}
       />
     );
   }

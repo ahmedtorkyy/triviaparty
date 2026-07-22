@@ -4,14 +4,14 @@ import { Button } from '../components/ui/Button';
 interface PodiumScreenProps {
   entries: PodiumEntry[];
   players: RoomPlayer[];
-  isHost: boolean;
   onRematch: () => void;
   onLeave: () => void;
   playerId: string;
   myRank: number;
+  totalQuestions: number;
 }
 
-export function PodiumScreen({ entries, players, onRematch, onLeave, playerId, myRank }: PodiumScreenProps) {
+export function PodiumScreen({ entries, players, onRematch, onLeave, playerId, myRank, totalQuestions }: PodiumScreenProps) {
   const sorted = [...entries].sort((a, b) => a.rank - b.rank);
   const topThree = sorted.filter((e) => e.rank <= 3);
   const rest = sorted.filter((e) => e.rank > 3);
@@ -22,7 +22,7 @@ export function PodiumScreen({ entries, players, onRematch, onLeave, playerId, m
       {/* SR-only announcement */}
       <div className="sr-only" role="status" aria-live="assertive" aria-atomic="true">
         Game over! You placed #{myRank} of {entries.length}.
-        {myEntry && ` You answered ${myEntry.correctCount} questions correctly.`}
+        {myEntry && ` You answered ${myEntry.correctCount} out of ${totalQuestions} questions correctly.`}
       </div>
 
       <h1 className="podium__title">Game Over!</h1>
@@ -65,9 +65,9 @@ export function PodiumScreen({ entries, players, onRematch, onLeave, playerId, m
               <span className="podium__rank" aria-label={`Rank ${entry.rank}`}>
                 #{entry.rank}
               </span>
-              <span className="podium__correct" aria-label={`${entry.correctCount} correct`}>
-                {entry.correctCount}/{entries[0]?.score > 0 ? Math.round(entries[0].score / 100) : 0} correct
-              </span>
+              <span className="podium__correct" aria-label={`${entry.correctCount} correct out of ${totalQuestions}`}>
+                              {entry.correctCount}/{totalQuestions} correct
+                            </span>
             </div>
           );
         })}
@@ -84,7 +84,7 @@ export function PodiumScreen({ entries, players, onRematch, onLeave, playerId, m
               </span>
               <span className="podium__score">{entry.score} pts</span>
               <span className="podium__rank">#{entry.rank}</span>
-              <span className="podium__correct">{entry.correctCount} correct</span>
+              <span className="podium__correct">{entry.correctCount}/{totalQuestions} correct</span>
             </div>
           ))}
         </div>
@@ -93,7 +93,7 @@ export function PodiumScreen({ entries, players, onRematch, onLeave, playerId, m
       {/* Player's own stats */}
       {myEntry && (
         <div className="podium__my-stats" aria-label="Your results">
-          <p>You placed #{myEntry.rank} with {myEntry.score} points. {myEntry.correctCount} correct answers. +{myEntry.correctCount * 100} coins earned!</p>
+          <p>You placed #{myEntry.rank} with {myEntry.score} points. {myEntry.correctCount} out of {totalQuestions} correct answers. +{myEntry.correctCount * 100} coins earned!</p>
         </div>
       )}
 

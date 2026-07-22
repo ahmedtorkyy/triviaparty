@@ -186,11 +186,16 @@ export class RoomService {
     if (!this.channel) throw new Error('Not connected to a room');
   }
 
-  // ---- Host broadcasts ----
+  // ---- Host / Conductor broadcasts ----
 
   /** Broadcast game_start with full payload: settings, questions, startAt */
   async startGame(payload: GameStartPayload) {
     this._ensureChannel();
+    // Conductor updates their presence: game_running = true, carry settings
+    await this.channel!.track({
+      game_running: true,
+      settings: payload.settings,
+    });
     await this.channel!.send({
       type: 'broadcast',
       event: 'game_start',
@@ -223,6 +228,10 @@ export class RoomService {
 
   async broadcastPodium(entries: PodiumEntry[]) {
     this._ensureChannel();
+    // Game ends - conductor clears game_running
+    await this.channel!.track({
+      game_running: false,
+    });
     await this.channel!.send({
       type: 'broadcast',
       event: 'podium',
@@ -232,6 +241,10 @@ export class RoomService {
 
   async broadcastRematch(playerId: string) {
     this._ensureChannel();
+    // Game resets - conductor clears game_running
+    await this.channel!.track({
+      game_running: false,
+    });
     await this.channel!.send({
       type: 'broadcast',
       event: 'rematch',

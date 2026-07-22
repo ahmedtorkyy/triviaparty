@@ -35,6 +35,10 @@ export interface RoomPlayer {
   lives: number;
   isEliminated: boolean;
   hasAnswered: boolean;
+  /** Room settings — carried by conductor's presence */
+  settings?: RoomSettings;
+  /** Whether a game is currently running — carried by conductor's presence */
+  gameRunning?: boolean;
 }
 
 export interface PlayerCharacterSnapshot {
@@ -90,6 +94,8 @@ export interface RevealResult {
   cumulativeScores: Record<string, number>;
   /** Correct count THIS QUESTION by each player (0 or 1) */
   correctThisQuestion: Record<string, number>;
+  /** Running correct counts per player — for conductor promotion survival */
+  correctCounts: Record<string, number>;
 }
 
 /**
@@ -129,6 +135,8 @@ export interface PodiumEntry {
   rank: number;
   /** Number of correct answers this player got */
   correctCount: number;
+  /** Total questions in the game (for denominator display) */
+  totalQuestions?: number;
 }
 
 // Conductor = the player who advances the game (host initially, falls through on disconnect)
