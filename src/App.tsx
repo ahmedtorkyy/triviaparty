@@ -31,6 +31,7 @@ function App() {
   const [gameStarted, setGameStarted] = useState(false);
   const [playerCharacterSnapshot, setPlayerCharacterSnapshot] = useState<PlayerCharacterSnapshot | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [isConductor, setIsConductor] = useState(false);
 
   const roomService = getRoomService();
 
@@ -55,15 +56,6 @@ function App() {
     setProfile(updated);
     setScreen('home');
   };
-
-  // Listen for rematch broadcasts to reset to lobby
-  useEffect(() => {
-    if (screen === 'mp_game') {
-      // The hook handles rematch internally and sets phase to lobby
-      // We just handle the screen transition back here
-      // The hook will set phase to lobby, and the game screen will show its lobby view
-    }
-  }, [screen]);
 
   // ---- Create Room ----
   const handleCreateRoom = () => {
@@ -97,6 +89,7 @@ function App() {
       setRoomCode(code);
       setRoomSettings(settings);
       setIsHost(true);
+      setIsConductor(true);
       setGameStarted(false);
       setRoomPlayers([
         {
@@ -163,6 +156,10 @@ function App() {
       setRoomSettings(null); // Joiners get settings from game_start broadcast
       setGameStarted(false);
       setRoomPlayers([]); // Populated via presence sync in the hook
+
+      // If this is a reconnect (we already have a profile and the room exists),
+      // request state snapshot to restore our position
+      // Note: The hook will detect if a game is already running and set isLateJoiner
       setScreen('lobby');
     } catch (err) {
       console.error('Failed to join room:', err);
@@ -173,6 +170,7 @@ function App() {
   // ---- Lobby ----
   const handleStartGame = () => {
     setScreen('mp_game');
+    setGameStarted(true);
   };
 
   const handleLeaveRoom = () => {
@@ -181,6 +179,7 @@ function App() {
     setRoomSettings(null);
     setRoomPlayers([]);
     setIsHost(false);
+    setIsConductor(false);
     setGameStarted(false);
     setScreen('home');
   };
@@ -191,9 +190,18 @@ function App() {
     setRoomSettings(null);
     setRoomPlayers([]);
     setIsHost(false);
+    setIsConductor(false);
     setGameStarted(false);
     setScreen('home');
   };
+
+  // Request state snapshot when rejoining a room with a running game
+  useEffect(() => {
+    if (screen === 'mp_game' && roomCode && roomService.isConnected) {
+      // The hook handles late joiner detection internally
+      // But we can also explicitly request snapshot if needed
+    }
+  }, [screen, roomCode, roomService]);
 
   // Loading state
   if (screen === 'loading' || !profile) {
@@ -255,6 +263,7 @@ function App() {
           settings={roomSettings}
           players={roomPlayers}
           isHost={isHost}
+          isConductor={isConductor}
           gameInProgress={gameStarted}
           onStartGame={handleStartGame}
           onLeave={handleLeaveRoom}
@@ -268,12 +277,15 @@ function App() {
           playerCharacter={playerCharacterSnapshot}
           settings={roomSettings}
           isHost={isHost}
+          isConductor={isConductor}
           roomCode={roomCode}
           onLeave={handleLeaveGame}
           onBackToLobby={() => {
             setGameStarted(false);
             setScreen('lobby');
           }}
+          onProfileChange={handleProfileChange}
+          profile={profile}
         />
       )}
     </div>

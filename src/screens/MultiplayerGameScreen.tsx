@@ -7,8 +7,6 @@ import { RevealScreen } from '../components/game/RevealScreen';
 import { TimerRing } from '../components/ui/TimerRing';
 import { Button } from '../components/ui/Button';
 import { PodiumScreen } from './PodiumScreen';
-import { saveProfile } from '../services/storage';
-import { loadProfile } from '../services/storage';
 
 interface MultiplayerGameScreenProps {
   playerId: string;
@@ -16,9 +14,12 @@ interface MultiplayerGameScreenProps {
   playerCharacter: PlayerCharacterSnapshot;
   settings: RoomSettings | null;
   isHost: boolean;
+  isConductor: boolean;
   roomCode: string;
   onLeave: () => void;
   onBackToLobby: () => void;
+  onProfileChange: (profile: import('../types').PlayerProfile) => void;
+  profile: import('../types').PlayerProfile;
 }
 
 export function MultiplayerGameScreen({
@@ -30,6 +31,8 @@ export function MultiplayerGameScreen({
   roomCode,
   onLeave,
   onBackToLobby,
+  onProfileChange,
+  profile,
 }: MultiplayerGameScreenProps) {
   const { state, submitAnswer, startGame, requestRematch, leaveRoom } = useMultiplayerGame({
     playerId,
@@ -57,23 +60,35 @@ export function MultiplayerGameScreen({
     onBackToLobby();
   };
 
-  // Award coins on podium
+  // Award coins on podium via app's profile handler
   useEffect(() => {
     if (state.phase === 'podium') {
-      const profile = loadProfile();
-      if (profile) {
-        const myEntry = state.podiumEntries.find((e) => e.playerId === playerId);
-        if (myEntry && myEntry.correctCount > 0) {
-          const coinsEarned = myEntry.correctCount * 100;
-          const updated = {
-            ...profile,
-            coins: profile.coins + coinsEarned,
-          };
-          saveProfile(updated);
-        }
+      const myEntry = state.podiumEntries.find((e) => e.playerId === playerId);
+      if (myEntry && myEntry.correctCount > 0) {
+        const coinsEarned = myEntry.correctCount * 100;
+        const updated = {
+          ...profile,
+          coins: profile.coins + coinsEarned,
+        };
+        onProfileChange(updated);
       }
     }
-  }, [state.phase, state.podiumEntries, playerId]);
+  }, [state.phase, state.podiumEntries, playerId, profile, onProfileChange]);
+
+  // ---- Late Joiner Waiting Screen ----
+  if (state.isLateJoiner) {
+    return (
+      <div className="screen mp-game mp-game--waiting-next">
+        <div className="mp-game__waiting" role="status" aria-live="polite">
+          <div className="mp-game__spinner" aria-hidden="true" />
+          <p>A game is in progress. You'll join the next round.</p>
+        </div>
+        <Button onClick={handleLeave} variant="ghost" size="md">
+          Leave
+        </Button>
+      </div>
+    );
+  }
 
   // ---- Lobby / Waiting ----
   if (state.phase === 'lobby' || state.phase === 'waiting') {

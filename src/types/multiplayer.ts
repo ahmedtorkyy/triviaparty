@@ -88,6 +88,8 @@ export interface RevealResult {
   pointsEarned: Record<string, number>;
   /** Each player's CUMULATIVE total after this question */
   cumulativeScores: Record<string, number>;
+  /** Correct count THIS QUESTION by each player (0 or 1) */
+  correctThisQuestion: Record<string, number>;
 }
 
 /**
@@ -113,6 +115,11 @@ export interface StateSnapshotPayload {
   playerAnswers?: PlayerAnswer[];
   pointsEarned?: Record<string, number>;
   cumulativeScores: Record<string, number>;
+  /** Running correct counts per player */
+  correctCounts: Record<string, number>;
+  /** Full question list so reconnecting player has everything */
+  questions: import('../types').TriviaQuestion[];
+  settings: RoomSettings;
 }
 
 export interface PodiumEntry {

@@ -6,6 +6,7 @@ interface LobbyScreenProps {
   settings: RoomSettings | null;
   players: RoomPlayer[];
   isHost: boolean;
+  isConductor: boolean;
   gameInProgress: boolean;
   onStartGame: () => void;
   onLeave: () => void;
@@ -15,11 +16,15 @@ export function LobbyScreen({
   code,
   settings,
   players,
-  isHost,
+  isConductor,
   gameInProgress,
   onStartGame,
   onLeave,
 }: LobbyScreenProps) {
+  // Show Start button if this player is the conductor (current host or promoted host)
+  const showStartButton = isConductor && settings;
+  const showCrown = isConductor;
+
   return (
     <div className="screen lobby">
       <div className="lobby__header">
@@ -30,7 +35,7 @@ export function LobbyScreen({
         </div>
       </div>
 
-      {/* Settings summary — only shown to host (joiners get settings from game_start) */}
+      {/* Settings summary — only shown to conductor (joiners get settings from game_start) */}
       {settings && (
         <div className="lobby__settings" aria-label="Room settings">
           <div className="lobby__setting">
@@ -84,7 +89,9 @@ export function LobbyScreen({
             </div>
             <span className="lobby__player-name">
               {player.nickname}
-              {player.isHost && <span className="lobby__host-badge" aria-label="Host">👑</span>}
+              {showCrown && player.id === players.find(p => p.isHost)?.id && (
+                <span className="lobby__host-badge" aria-label="Host">👑</span>
+              )}
             </span>
           </div>
         ))}
@@ -92,7 +99,7 @@ export function LobbyScreen({
 
       {/* Actions */}
       <div className="lobby__actions">
-        {isHost && settings && (
+        {showStartButton && (
           <Button
             onClick={onStartGame}
             variant="primary"
@@ -103,12 +110,12 @@ export function LobbyScreen({
             {gameInProgress ? 'Join Game' : 'Start Game'}
           </Button>
         )}
-        {isHost && !settings && (
+        {isConductor && !settings && (
           <p className="lobby__waiting" role="status" aria-live="polite">
             Configuring room...
           </p>
         )}
-        {!isHost && (
+        {!isConductor && (
           <p className="lobby__waiting" role="status" aria-live="polite">
             Waiting for the host to start the game...
           </p>

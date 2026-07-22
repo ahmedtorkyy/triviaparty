@@ -73,6 +73,7 @@ export class RoomService {
           lives: 3,
           isEliminated: false,
           hasAnswered: false,
+          game_running: false,
         });
       }
     });
@@ -103,70 +104,71 @@ export class RoomService {
       },
     });
     return new Promise((resolve) => {
-              let resolved = false;
-              let hostSeen = false;
-              let presenceCheck: ReturnType<typeof setInterval> | null = null;
-              const timeout = setTimeout(() => {
-                if (!resolved) {
-                  resolved = true;
-                  if (presenceCheck) clearInterval(presenceCheck);
-                  this.leave();
-                  resolve(hostSeen ? 'timeout' : 'not_found');
-                }
-              }, 4000); // 2s for host check + 2s buffer
+      let resolved = false;
+      let hostSeen = false;
+      let presenceCheck: ReturnType<typeof setInterval> | null = null;
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          if (presenceCheck) clearInterval(presenceCheck);
+          this.leave();
+          resolve(hostSeen ? 'timeout' : 'not_found');
+        }
+      }, 4000); // 2s for host check + 2s buffer
 
-              // Poll for host presence (fires every 200ms)
-              presenceCheck = setInterval(() => {
-                if (!this.channel) return;
-                const state = this.channel.presenceState();
-                for (const [_id, presences] of Object.entries(state)) {
-                  const p = (presences as any[])[0];
-                  if (p?.isHost) {
-                    hostSeen = true;
-                    if (presenceCheck) clearInterval(presenceCheck);
-                    break;
-                  }
-                }
-              }, 200);
+      // Poll for host presence (fires every 200ms)
+      presenceCheck = setInterval(() => {
+        if (!this.channel) return;
+        const state = this.channel.presenceState();
+        for (const [_id, presences] of Object.entries(state)) {
+          const p = (presences as any[])[0];
+          if (p?.isHost) {
+            hostSeen = true;
+            if (presenceCheck) clearInterval(presenceCheck);
+            break;
+          }
+        }
+      }, 200);
 
-              this._setupChannel(player, false);
-              this.channel!.subscribe(async (status) => {
-                if (status === 'SUBSCRIBED') {
-                  await this.channel!.track({
-                    ...player,
-                    isHost: false,
-                    score: 0,
-                    lives: 3,
-                    isEliminated: false,
-                    hasAnswered: false,
-                  });
+      this._setupChannel(player, false);
+      this.channel!.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await this.channel!.track({
+            ...player,
+            isHost: false,
+            score: 0,
+            lives: 3,
+            isEliminated: false,
+            hasAnswered: false,
+            game_running: false,
+          });
 
-                  // Wait briefly for presence sync to show a host
-                  setTimeout(() => {
-                    if (!resolved) {
-                      resolved = true;
-                      clearTimeout(timeout);
-                      if (presenceCheck) clearInterval(presenceCheck);
-                      if (!hostSeen) {
-                        this.leave();
-                        resolve('not_found');
-                      } else {
-                        this._connected = true;
-                        resolve('ok');
-                      }
-                    }
-                  }, 2000);
-                }
-                if (status === 'CHANNEL_ERROR') {
-                  if (!resolved) {
-                    resolved = true;
-                    clearTimeout(timeout);
-                    if (presenceCheck) clearInterval(presenceCheck);
-                    resolve('not_found');
-                  }
-                }
-              });
-            });
+          // Wait briefly for presence sync to show a host
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              clearTimeout(timeout);
+              if (presenceCheck) clearInterval(presenceCheck);
+              if (!hostSeen) {
+                this.leave();
+                resolve('not_found');
+              } else {
+                this._connected = true;
+                resolve('ok');
+              }
+            }
+          }, 2000);
+        }
+        if (status === 'CHANNEL_ERROR') {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            if (presenceCheck) clearInterval(presenceCheck);
+            resolve('not_found');
+          }
+        }
+      });
+    });
   }
 
   // ---- Leave ----

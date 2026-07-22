@@ -44,6 +44,8 @@ export interface MultiplayerGameState {
   podiumEntries: PodiumEntry[];
   /** My rank from podium — used for a11y announcement */
   myPodiumRank: number;
+  /** Whether I am a late joiner waiting for next game */
+  isLateJoiner: boolean;
 }
 
 export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
@@ -68,6 +70,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   const [cumulativeScore, setCumulativeScore] = useState(0);
   const [podiumEntries, setPodiumEntries] = useState<PodiumEntry[]>([]);
   const [myPodiumRank, setMyPodiumRank] = useState(0);
+  const [isLateJoiner, setIsLateJoiner] = useState(false);
 
   const roomService = getRoomService();
   const gameQuestionsRef = useRef<TriviaQuestion[]>([]);
@@ -83,6 +86,10 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   const activeSettingsRef = useRef<RoomSettings>(options.settings);
   /** Track local cumulative score to avoid losing it on reveal */
   const localCumulativeScoreRef = useRef<number>(0);
+  /** Running correct counts per player — maintained by conductor */
+  const correctCountsRef = useRef<Map<string, number>>(new Map());
+  /** Did I already request a snapshot on rejoin? */
+  const snapshotRequestedRef = useRef<boolean>(false);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -112,14 +119,14 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
 
   // ---- Submit answer ----
   const submitAnswer = useCallback((answer: string) => {
-    if (hasAnswered || phase !== 'question') return;
+    if (hasAnswered || phase !== 'question' || isLateJoiner) return;
     setHasAnswered(true);
     setSelectedAnswer(answer);
 
     const elapsed = activeSettingsRef.current.timerSeconds * 1000 - timeRemaining * 1000;
     setIsCorrect(answer === currentQuestion?.correctAnswer);
     roomService.submitAnswer({ playerId: options.playerId, answer, timeMs: elapsed });
-  }, [hasAnswered, phase, timeRemaining, currentQuestion, options.playerId, roomService]);
+  }, [hasAnswered, phase, timeRemaining, currentQuestion, options.playerId, roomService, isLateJoiner]);
 
   // ---- Request rematch ----
   const requestRematch = useCallback(() => {
@@ -149,10 +156,13 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
     setCumulativeScore(0);
     setPodiumEntries([]);
     setMyPodiumRank(0);
+    setIsLateJoiner(false);
     gameQuestionsRef.current = [];
     revealSentRef.current = false;
     gameStartedRef.current = false;
     localCumulativeScoreRef.current = 0;
+    correctCountsRef.current = new Map();
+    snapshotRequestedRef.current = false;
   }
 
   // ---- Conductor: start game ----
@@ -186,9 +196,6 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   }, [computeIsConductor, options.settings, roomService]);
 
   // ========== Conductor: timer expiry / all answered ==========
-  // This effect runs on the conductor only. It triggers reveal when
-  // the timer reaches 0 OR when all present players have answered.
-  // revealSentRef guards against double-fire.
   useEffect(() => {
     if (!computeIsConductor()) return;
     if (phase !== 'question') return;
@@ -217,6 +224,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
 
       // Compute points
       const pointsEarned: Record<string, number> = {};
+      const correctThisQuestion: Record<string, number> = {};
       const playerAnswers: { playerId: string; answer: string | null; timeMs: number }[] = [];
 
       for (const p of allPresent) {
@@ -228,7 +236,12 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
           ? Math.max(0, Math.floor((1 - ansTime / (activeSettingsRef.current.timerSeconds * 1000)) * 100))
           : 0;
         pointsEarned[p.id] = basePoints + speedBonus;
+        correctThisQuestion[p.id] = isCorrectAns ? 1 : 0;
         playerAnswers.push({ playerId: p.id, answer: playerAnswer, timeMs: ansTime });
+
+        // Update running correct count
+        const prevCorrect = correctCountsRef.current.get(p.id) || 0;
+        correctCountsRef.current.set(p.id, prevCorrect + (isCorrectAns ? 1 : 0));
       }
 
       // Compute running cumulative scores
@@ -244,6 +257,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         playerAnswers,
         pointsEarned,
         cumulativeScores,
+        correctThisQuestion,
       };
 
       roomService.broadcastReveal(results, questionIndex);
@@ -283,11 +297,10 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
     const timer = setTimeout(async () => {
       const nextIndex = questionIndex + 1;
       if (nextIndex >= totalQuestions) {
-        // Broadcast podium
+        // Broadcast podium with TRUE correct counts
         const sorted = [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
         const entries: PodiumEntry[] = sorted.map((p, i) => {
-          const correctCount = /* count correct answers — approximate from reveal results or just score/100 */
-            Math.round((p.score || 0) / 100);
+          const correctCount = correctCountsRef.current.get(p.id) || 0;
           return {
             playerId: p.id,
             nickname: p.nickname,
@@ -330,8 +343,18 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         setPlayers((prev) => {
           const existing = prev.findIndex((p) => p.id === player.id);
           if (existing >= 0) {
+            // Returning player: PRESERVE their score, update other fields
             const updated = [...prev];
-            updated[existing] = player;
+            updated[existing] = {
+              ...updated[existing],
+              nickname: player.nickname,
+              character: player.character,
+              isHost: player.isHost,
+              lives: player.lives,
+              isEliminated: player.isEliminated,
+              hasAnswered: player.hasAnswered,
+              // score: DO NOT overwrite — keep the known score
+            };
             return updated;
           }
           return [...prev, player];
@@ -372,6 +395,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         revealSentRef.current = false;
         playerAnswersRef.current = new Map();
         answerTimestampsRef.current = new Map();
+        correctCountsRef.current = new Map();
 
         // Go to first question after countdown
         setTimeout(() => {
@@ -387,6 +411,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
             setPhase('question');
             playerAnswersRef.current = new Map();
             answerTimestampsRef.current = new Map();
+            correctCountsRef.current = new Map();
             revealSentRef.current = false;
 
             const endTs = Date.now() + activeSettingsRef.current.timerSeconds * 1000;
@@ -407,6 +432,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         setAnsweredPlayerIds([]);
         playerAnswersRef.current = new Map();
         answerTimestampsRef.current = new Map();
+        correctCountsRef.current = new Map();
         revealSentRef.current = false;
         setPhase('question');
         startCountdown(endTimestamp);
@@ -466,12 +492,15 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         setPodiumEntries([]);
         setMyPodiumRank(0);
         setAnsweredPlayerIds([]);
+        setIsLateJoiner(false);
         playerAnswersRef.current = new Map();
         answerTimestampsRef.current = new Map();
+        correctCountsRef.current = new Map();
         gameQuestionsRef.current = [];
         revealSentRef.current = false;
         gameStartedRef.current = false;
         localCumulativeScoreRef.current = 0;
+        snapshotRequestedRef.current = false;
         // Keep players — they stay in the room
       },
 
@@ -485,6 +514,9 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
           endsAt: endTimestampRef.current,
           phase: isQuestionPhase ? 'question' : 'reveal',
           cumulativeScores: {},
+          correctCounts: {},
+          questions: gameQuestionsRef.current,
+          settings: activeSettingsRef.current,
         };
 
         // If in reveal phase, include current reveal data
@@ -495,9 +527,10 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
           snapshot.pointsEarned = currentResults.pointsEarned;
         }
 
-        // Build cumulative scores from current state
+        // Build cumulative scores and correct counts from current state
         for (const p of players) {
           snapshot.cumulativeScores[p.id] = p.score || 0;
+          snapshot.correctCounts[p.id] = correctCountsRef.current.get(p.id) || 0;
         }
 
         roomService.sendStateSnapshot(snapshot);
@@ -516,6 +549,18 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
           }))
         );
 
+        // Restore correct counts
+        for (const [id, count] of Object.entries(payload.correctCounts)) {
+          correctCountsRef.current.set(id, count);
+        }
+
+        // Restore questions and settings
+        gameQuestionsRef.current = payload.questions || [];
+        activeSettingsRef.current = payload.settings;
+        if (payload.questions && payload.questions.length > 0) {
+          setTotalQuestions(payload.questions.length);
+        }
+
         // Set phase
         if (payload.phase === 'question') {
           setPhase('question');
@@ -530,11 +575,16 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
               playerAnswers: payload.playerAnswers || [],
               pointsEarned: payload.pointsEarned || {},
               cumulativeScores: payload.cumulativeScores,
+              correctThisQuestion: {},
             };
             setCurrentResults(reconstructed);
           }
           setPhase('reveal');
         }
+
+        // If we were a late joiner and now have state, we're caught up
+        setIsLateJoiner(false);
+        snapshotRequestedRef.current = false;
       },
 
       onError(error) {
@@ -542,6 +592,36 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
       },
     });
   }, [roomService, options.playerId, startCountdown, clearTimer, computeIsConductor, phase, questionIndex, currentResults, players]);
+
+  // ========== Late joiner detection & reconnect ==========
+  // If game_start has been received (gameStartedRef) but we're still in lobby/waiting,
+  // we're a late joiner. Request state snapshot from conductor.
+  useEffect(() => {
+    if (phase !== 'lobby' && phase !== 'waiting') {
+      // We're already in a game phase, nothing to do
+      snapshotRequestedRef.current = false;
+      return;
+    }
+
+    // If we have a game running flag from the conductor's presence, or
+    // if we received game_start but didn't transition (race), we need to catch up
+    const isRunning = gameStartedRef.current && phase === 'lobby';
+
+    if (isRunning && !snapshotRequestedRef.current) {
+      snapshotRequestedRef.current = true;
+      setIsLateJoiner(true);
+      // Request current state from conductor
+      roomService.requestStateSnapshot();
+    }
+  }, [phase, roomService]);
+
+  // Also check conductor's presence for "game_running" flag
+  useEffect(() => {
+    if (phase !== 'lobby' && phase !== 'waiting') return;
+
+    // We could check presence for a game_running flag, but the game_start broadcast
+    // is the more reliable signal. The conductor should track this in presence.
+  }, [phase, players]);
 
   // ========== Player: auto-clear reveal after display ==========
   useEffect(() => {
@@ -556,9 +636,6 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
     }, 4000);
     return () => clearTimeout(timer);
   }, [computeIsConductor, phase]);
-
-  // ========== Player: persist reveal duration ==========
-  // (Conductor handles advance via their own timer)
 
   // Cleanup
   useEffect(() => {
@@ -585,6 +662,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
       cumulativeScore,
       podiumEntries,
       myPodiumRank,
+      isLateJoiner,
     },
     submitAnswer,
     startGame,
