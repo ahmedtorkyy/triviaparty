@@ -36,7 +36,7 @@ export function MultiplayerGameScreen({
   onProfileChange,
   profile,
 }: MultiplayerGameScreenProps) {
-  const { state, submitAnswer, startGame, requestRematch, leaveRoom } = useMultiplayerGame({
+  const { state, submitAnswer, startGame, requestRematch, leaveRoom, extendDeadline } = useMultiplayerGame({
     playerId,
     playerNickname,
     playerCharacter,
@@ -55,14 +55,15 @@ export function MultiplayerGameScreen({
   const [showPowerUpSheet, setShowPowerUpSheet] = useState(false);
   const [usedThisQuestion, setUsedThisQuestion] = useState<PowerUpType[]>([]);
   const [removedAnswers, setRemovedAnswers] = useState<string[]>([]);
-  const [extraTimeSeconds, setExtraTimeSeconds] = useState(0);
+  const [extraTimeToast, setExtraTimeToast] = useState<string | null>(null);
 
   // Reset power-ups on new question
   useEffect(() => {
     if (state.phase === 'question') {
       setUsedThisQuestion([]);
       setRemovedAnswers([]);
-      setExtraTimeSeconds(0);
+      setShowPowerUpSheet(false);
+      setExtraTimeToast(null);
     }
   }, [state.phase, state.questionIndex]);
 
@@ -76,9 +77,26 @@ export function MultiplayerGameScreen({
       const toRemove = shuffled.slice(0, 2);
       setRemovedAnswers(toRemove);
     } else if (type === 'extra_time') {
-      setExtraTimeSeconds(10);
+      // Real deadline extension: extends endTimestampRef by 10s + broadcasts
+      extendDeadline();
+      setExtraTimeToast('You used Extra Time (+10s)');
     }
   };
+
+  // Listen for other players' Extra Time usage
+  // The hook handles this via onExtraTime callback internally,
+  // but we track it here for UI toast display via state.
+  useEffect(() => {
+    if (state.phase === 'question') {
+      // The hook stores extended deadlines; we just show toast for others
+      // via the roomService callback which is handled in the hook.
+      // For now, display is handled by the extraTimeToast state.
+      if (extraTimeToast) {
+        const t = setTimeout(() => setExtraTimeToast(null), 3000);
+        return () => clearTimeout(t);
+      }
+    }
+  }, [extraTimeToast, state.phase]);
 
   const handleLeave = () => {
     leaveRoom();
@@ -193,10 +211,17 @@ export function MultiplayerGameScreen({
         )}
       </div>
 
+      {/* Extra Time toast on main screen */}
+      {extraTimeToast && (
+        <div className="mp-game__extra-time-note" role="status" aria-live="polite">
+          ⏱ {extraTimeToast}
+        </div>
+      )}
+
       {state.phase === 'question' && state.currentQuestion && !state.hasAnswered && (
         <div className="mp-game__question-area">
           <div className="mp-game__timer-row">
-            <TimerRing seconds={state.timeRemaining + extraTimeSeconds} total={timerSeconds + extraTimeSeconds} />
+            <TimerRing seconds={state.timeRemaining} total={timerSeconds} />
           </div>
 
           {/* Power-up button */}
@@ -209,12 +234,6 @@ export function MultiplayerGameScreen({
               ⚡
             </button>
           </div>
-
-          {extraTimeSeconds > 0 && (
-            <div className="mp-game__extra-time-note" role="status">
-              ⏱ Extra Time active (+{extraTimeSeconds}s)
-            </div>
-          )}
 
           {/* Answered indicator */}
           <div className="mp-game__answered-indicator" aria-live="polite">
@@ -238,13 +257,7 @@ export function MultiplayerGameScreen({
       {state.phase === 'question' && state.hasAnswered && (
         <div className="mp-game__waiting-answer" role="status" aria-live="polite">
           <p>Waiting for other players...</p>
-          <TimerRing seconds={state.timeRemaining + extraTimeSeconds} total={timerSeconds + extraTimeSeconds} />
-
-          {extraTimeSeconds > 0 && (
-            <div className="mp-game__extra-time-note" role="status">
-              ⏱ Extra Time active (+{extraTimeSeconds}s)
-            </div>
-          )}
+          <TimerRing seconds={state.timeRemaining} total={timerSeconds} />
 
           {/* Answered indicator */}
           <div className="mp-game__answered-indicator">

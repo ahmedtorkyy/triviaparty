@@ -27,6 +27,7 @@ export interface RoomEventCallbacks {
   onStateRequest?: (playerId: string) => void;
   onStateSnapshot?: (payload: StateSnapshotPayload) => void;
   onError?: (error: string) => void;
+  onExtraTime?: (playerId: string) => void;
 }
 
 // ====== Room Service ======
@@ -272,6 +273,16 @@ export class RoomService {
     });
   }
 
+  /** Player used Extra Time power-up */
+  async broadcastExtraTime(playerId: string) {
+    this._ensureChannel();
+    await this.channel!.send({
+      type: 'broadcast',
+      event: 'powerup_extratime',
+      payload: { playerId },
+    });
+  }
+
   // ---- Player submits answer ----
   async submitAnswer(answer: PlayerAnswer) {
     this._ensureChannel();
@@ -345,6 +356,10 @@ export class RoomService {
 
     this.channel.on('broadcast', { event: 'player_answer' }, ({ payload }) => {
       this.callbacks.onPlayerAnswer?.(payload.playerId, payload.answer, payload.timeMs);
+    });
+
+    this.channel.on('broadcast', { event: 'powerup_extratime' }, ({ payload }) => {
+      this.callbacks.onExtraTime?.(payload.playerId);
     });
   }
 }

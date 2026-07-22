@@ -54,6 +54,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   startGame: () => void;
   requestRematch: () => void;
   leaveRoom: () => void;
+  extendDeadline: () => void;
 } {
   const [phase, setPhase] = useState<MultiplayerPhase>('lobby');
   const [currentQuestion, setCurrentQuestion] = useState<TriviaQuestion | null>(null);
@@ -96,6 +97,8 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   const isSpectatingRef = useRef<boolean>(false);
   /** Last known reveal payload (for conductor promotion survival) */
   const lastRevealRef = useRef<RevealResult | null>(null);
+  /** Track players who used Extra Time and their extended deadlines per question */
+  const extendedDeadlinesRef = useRef<Map<string, number>>(new Map());
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -122,6 +125,15 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
     tick();
     timerRef.current = setInterval(tick, 100);
   }, [clearTimer]);
+
+  /** Extend my deadline by 10s (Extra Time power-up) */
+  const extendDeadline = useCallback(() => {
+    const extra = 10 * 1000;
+    endTimestampRef.current += extra;
+    setTimeRemaining((prev) => Math.round((prev + 10) * 10) / 10);
+    // Broadcast to room so conductor knows
+    roomService.broadcastExtraTime(options.playerId);
+  }, [roomService, options.playerId]);
 
   // ---- Submit answer ----
   const submitAnswer = useCallback((answer: string) => {
@@ -213,7 +225,19 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
 
     const allPresent = players.filter((p) => !p.isEliminated);
     const allAnswered = allPresent.length > 0 && allPresent.every((p) => answeredPlayerIds.includes(p.id));
-    const timerExpired = timeRemaining <= 0;
+
+    // Timer check: base deadline passed AND extended players' deadlines also passed
+    const baseExpired = timeRemaining <= 0;
+    let allExtendedExpired = true;
+    if (extendedDeadlinesRef.current.size > 0) {
+      for (const [_playerId, deadline] of extendedDeadlinesRef.current) {
+        if (Date.now() < deadline) {
+          allExtendedExpired = false;
+          break;
+        }
+      }
+    }
+    const timerExpired = baseExpired && allExtendedExpired;
 
     if ((timerExpired || allAnswered) && !revealSentRef.current) {
       revealSentRef.current = true;
@@ -447,6 +471,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         answerTimestampsRef.current = new Map();
         correctCountsRef.current = new Map();
         cumulativeScoresRef.current = new Map();
+        extendedDeadlinesRef.current = new Map();
 
         // Go to first question after countdown
         setTimeout(() => {
@@ -474,6 +499,9 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
       onQuestion(question, endTimestamp, qIndex, total) {
         // SPECTATOR GUARD: ignore question broadcasts while spectating
         if (isSpectatingRef.current) return;
+
+        // Clear extended deadlines from previous question
+        extendedDeadlinesRef.current = new Map();
 
         // Clear any countdown timer from game_start
         setCurrentQuestion(question);
@@ -537,6 +565,16 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
             score: results.cumulativeScores[p.id] ?? p.score,
           }))
         );
+      },
+
+      onExtraTime(playerId) {
+        // Track this player's extended deadline (conductor uses this)
+        const extendedDeadline = endTimestampRef.current + 10 * 1000;
+        extendedDeadlinesRef.current.set(playerId, extendedDeadline);
+        // Update the local timer display if we're the one who extended
+        if (playerId === options.playerId) {
+          setTimeRemaining((prev) => Math.round((prev + 10) * 10) / 10);
+        }
       },
 
       onPodium(entries) {
@@ -742,5 +780,6 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
     startGame,
     requestRematch,
     leaveRoom,
+    extendDeadline,
   };
 }
