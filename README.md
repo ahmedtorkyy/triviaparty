@@ -46,5 +46,5 @@ npm run preview
 Built with NVDA screen reader in mind from day one:
 - Semantic HTML, ARIA labels, keyboard navigation
 - Screen-reader-friendly character maker
-- Arablic RTL support ready
+- Arabic RTL support ready
 - Focus management throughout

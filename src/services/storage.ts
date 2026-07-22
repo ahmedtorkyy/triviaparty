@@ -51,14 +51,15 @@ export function saveProfile(profile: PlayerProfile): void {
 }
 
 export function claimDailyBonus(profile: PlayerProfile): { profile: PlayerProfile; claimed: boolean } {
-  const today = new Date().toISOString().split('T')[0];
-  if (profile.lastDailyBonus === today) {
+  const now = new Date();
+  const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  if (profile.lastDailyBonus === localDate) {
     return { profile, claimed: false };
   }
   const updated = {
     ...profile,
     coins: profile.coins + 100,
-    lastDailyBonus: today,
+    lastDailyBonus: localDate,
   };
   saveProfile(updated);
   return { profile: updated, claimed: true };

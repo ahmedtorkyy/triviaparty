@@ -20,12 +20,7 @@ export function RevealScreen({
     : 0;
 
   return (
-    <div
-      className="reveal-screen"
-      role="alert"
-      aria-live="assertive"
-      aria-atomic="true"
-    >
+    <div className="reveal-screen">
       <div className={`reveal-screen__banner ${isCorrect ? 'reveal-screen__banner--correct' : 'reveal-screen__banner--wrong'}`}>
         <span className="reveal-screen__icon" aria-hidden="true">
           {isCorrect ? '✓' : '✗'}

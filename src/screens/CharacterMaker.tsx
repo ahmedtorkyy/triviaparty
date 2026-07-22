@@ -14,6 +14,31 @@ const EYE_STYLES = ['round', 'almond', 'happy', 'sunglasses', 'none'];
 const ACCESSORIES = ['none', 'headphones', 'hat', 'bowtie', 'crown'];
 const BG_COLORS = ['#7C5CFF', '#FF6B35', '#3B82F6', '#10B981', '#EC4899', '#F59E0B'];
 
+const SKIN_NAMES: Record<string, string> = {
+  '#8D5524': 'deep brown',
+  '#C68642': 'warm tan',
+  '#E0AC69': 'golden',
+  '#F1C27D': 'honey',
+  '#FFDFC4': 'ivory',
+  '#D3B88E': 'olive',
+};
+const HAIR_COLOR_NAMES: Record<string, string> = {
+  '#2c1b0e': 'dark brown',
+  '#1a1a1a': 'black',
+  '#d4a017': 'blonde',
+  '#8B4513': 'chestnut',
+  '#c0c0c0': 'silver',
+  '#ff4500': 'ginger',
+};
+const BG_COLOR_NAMES: Record<string, string> = {
+  '#7C5CFF': 'violet',
+  '#FF6B35': 'orange',
+  '#3B82F6': 'blue',
+  '#10B981': 'green',
+  '#EC4899': 'pink',
+  '#F59E0B': 'amber',
+};
+
 const LABELS: Record<string, string> = {
   skinTone: 'Skin Tone',
   hairStyle: 'Hair Style',
@@ -76,6 +101,9 @@ export function CharacterMaker({ onComplete }: CharacterMakerProps) {
   const accessoryLabel = ACCESSORIES.includes(character.accessory)
     ? character.accessory
     : 'none';
+  const skinLabel = SKIN_NAMES[character.skinTone] || character.skinTone;
+  const hairColorLabel = HAIR_COLOR_NAMES[character.hairColor] || character.hairColor;
+  const bgLabel = BG_COLOR_NAMES[character.backgroundColor] || character.backgroundColor;
 
   return (
     <div className="screen character-maker">
@@ -132,7 +160,7 @@ export function CharacterMaker({ onComplete }: CharacterMakerProps) {
       </div>
 
       <div className="sr-only" aria-live="polite" role="status">
-        {hairLabel} hair, {eyeLabel} eyes, {accessoryLabel}
+        {skinLabel} skin tone, {hairColorLabel} hair, {hairLabel} hair style, {eyeLabel} eyes, {accessoryLabel}, {bgLabel} background
       </div>
 
       <div className="character-maker__controls">
@@ -141,6 +169,7 @@ export function CharacterMaker({ onComplete }: CharacterMakerProps) {
           current={character.skinTone}
           options={SKIN_TONES}
           colorPreview
+          nameMap={SKIN_NAMES}
           onPrev={() => setCharacter({ ...character, skinTone: cycleOption(character.skinTone, SKIN_TONES, -1) })}
           onNext={() => setCharacter({ ...character, skinTone: cycleOption(character.skinTone, SKIN_TONES, 1) })}
         />
@@ -156,6 +185,7 @@ export function CharacterMaker({ onComplete }: CharacterMakerProps) {
           current={character.hairColor}
           options={HAIR_COLORS}
           colorPreview
+          nameMap={HAIR_COLOR_NAMES}
           onPrev={() => setCharacter({ ...character, hairColor: cycleOption(character.hairColor, HAIR_COLORS, -1) })}
           onNext={() => setCharacter({ ...character, hairColor: cycleOption(character.hairColor, HAIR_COLORS, 1) })}
         />
@@ -178,6 +208,7 @@ export function CharacterMaker({ onComplete }: CharacterMakerProps) {
           current={character.backgroundColor}
           options={BG_COLORS}
           colorPreview
+          nameMap={BG_COLOR_NAMES}
           onPrev={() => setCharacter({ ...character, backgroundColor: cycleOption(character.backgroundColor, BG_COLORS, -1) })}
           onNext={() => setCharacter({ ...character, backgroundColor: cycleOption(character.backgroundColor, BG_COLORS, 1) })}
         />
@@ -218,13 +249,15 @@ interface OptionControlProps {
   current: string;
   options: string[];
   colorPreview?: boolean;
+  nameMap?: Record<string, string>;
   onPrev: () => void;
   onNext: () => void;
 }
 
-function OptionControl({ label, current, options, colorPreview, onPrev, onNext }: OptionControlProps) {
+function OptionControl({ label, current, options, colorPreview, nameMap, onPrev, onNext }: OptionControlProps) {
   const currentIndex = options.indexOf(current);
-  const currentLabel = currentIndex >= 0 ? current : current;
+  const displayName = (nameMap && nameMap[current]) || current;
+  const currentLabel = currentIndex >= 0 ? displayName : current;
 
   return (
     <div className="option-control" role="group" aria-label={label}>

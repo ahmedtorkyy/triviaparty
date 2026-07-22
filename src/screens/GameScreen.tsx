@@ -21,6 +21,7 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
   const [showResult, setShowResult] = useState(false);
   const [announcement, setAnnouncement] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('any');
+  const [newBestStreak, setNewBestStreak] = useState(false);
   const prevPhaseRef = useRef(game.phase);
   const announcementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -41,13 +42,16 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
       setShowReveal(true);
       if (game.isCorrect) {
         setAnnouncement('Correct!');
-      } else {
-        setAnnouncement('Wrong answer.');
+      } else if (game.currentQuestion) {
+        setAnnouncement(`Wrong. The correct answer is: ${game.currentQuestion.correctAnswer}`);
       }
     }
 
     if (game.phase === 'result') {
       setShowResult(true);
+      const oldBest = profile.stats.bestSurvivalStreak;
+      setNewBestStreak(game.bestStreak > oldBest);
+
       const updated = updateStats(
         profile,
         game.answers.filter((a) => a.isCorrect).length,
@@ -210,7 +214,7 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
             <span className="result-screen__streak-label">Best Streak</span>
             <span className="result-screen__streak-value">
               {game.bestStreak}
-              {game.bestStreak > (profile.stats.bestSurvivalStreak - (profile.stats.gamesPlayed > 0 ? 0 : 0)) ? ' 🔥' : ''}
+              {newBestStreak ? ' 🔥' : ''}
             </span>
           </div>
 
@@ -232,7 +236,7 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
   if (!currentQuestion) return null;
 
   return (
-    <div className="screen game-screen" role="main" aria-live="polite">
+    <div className="screen game-screen" role="main">
       {/* Screen reader announcement */}
       <div className="sr-only" aria-live="assertive" aria-atomic="true">
         {announcement}

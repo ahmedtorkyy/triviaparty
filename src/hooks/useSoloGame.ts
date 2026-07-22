@@ -4,6 +4,9 @@ import { fetchQuestions } from '../services/triviaApi';
 
 const MAX_LIVES = 3;
 const QUESTION_TIME = 15; // seconds
+const REFETCH_THRESHOLD = 5; // fetch more when this many unplayed remain
+const FETCH_BATCH_SIZE = 20;
+const MAX_RETRIES = 1;
 
 interface UseSoloGameReturn {
   phase: GamePhase;
@@ -42,9 +45,12 @@ export function useSoloGame(): UseSoloGameReturn {
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [_fetchingMore, setFetchingMore] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
+  const categoryRef = useRef<string | undefined>(undefined);
+  const isTabHiddenRef = useRef(false);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -60,6 +66,7 @@ export function useSoloGame(): UseSoloGameReturn {
 
     timerRef.current = setInterval(() => {
       setTimeRemaining((prev) => {
+        if (isTabHiddenRef.current) return prev; // don't count down while tab hidden
         const next = prev - 0.1;
         if (next <= 0) {
           clearTimer();
@@ -70,13 +77,64 @@ export function useSoloGame(): UseSoloGameReturn {
     }, 100);
   }, [clearTimer]);
 
+  // Pause / resume timer on tab visibility change
+  useEffect(() => {
+    const handleVisibility = () => {
+      isTabHiddenRef.current = document.hidden;
+      if (!document.hidden && phase === 'question' && !hasAnswered) {
+        // Resume countdown — recalculate from the original end-time
+        // We just restart the timer from current timeRemaining
+        const remaining = timeRemaining;
+        if (remaining > 0) {
+          clearTimer();
+          startTimer(remaining);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [phase, hasAnswered, timeRemaining, clearTimer, startTimer]);
+
+  // Background fetch more questions
+  const fetchMore = useCallback(async () => {
+    if (_fetchingMore) return;
+    setFetchingMore(true);
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const newQuestions = await fetchQuestions(FETCH_BATCH_SIZE, categoryRef.current);
+        setQuestions((prev) => [...prev, ...newQuestions]);
+        setFetchingMore(false);
+        return; // success
+      } catch (err) {
+        console.warn(`Background fetch attempt ${attempt + 1} failed:`, err);
+        if (attempt < MAX_RETRIES) {
+          // Wait briefly before retry
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+    }
+    // All retries exhausted — set a flag but don't end game yet
+    // The player can continue answering remaining questions
+    setFetchingMore(false);
+  }, [_fetchingMore]);
+
+  // Check if we need to fetch more questions after currentIndex advances
+  const checkAndFetchMore = useCallback((currentQ: number, totalQ: number) => {
+    const remaining = totalQ - currentQ - 1; // unplayed questions after current one
+    if (remaining <= REFETCH_THRESHOLD && !_fetchingMore) {
+      fetchMore();
+    }
+  }, [_fetchingMore, fetchMore]);
+
   const startGame = useCallback(async (category?: string) => {
     setLoading(true);
     setError(null);
     setPhase('idle');
+    categoryRef.current = category;
 
     try {
-      const qs = await fetchQuestions(20, category); // Fetch 20 for survival
+      const qs = await fetchQuestions(FETCH_BATCH_SIZE, category);
       setQuestions(qs);
       setCurrentIndex(0);
       setScore(0);
@@ -87,6 +145,8 @@ export function useSoloGame(): UseSoloGameReturn {
       setHasAnswered(false);
       setSelectedAnswer(null);
       setIsCorrect(null);
+      setFetchingMore(false);
+      isTabHiddenRef.current = false;
       setPhase('question');
       startTimer(QUESTION_TIME);
     } catch (err: any) {
@@ -130,12 +190,15 @@ export function useSoloGame(): UseSoloGameReturn {
       setLives((prev) => prev - 1);
     }
 
-    // Auto-advance to reveal after a short pause
+    // Check if we need more questions for endless survival
+    checkAndFetchMore(currentIndex, questions.length);
+
+    // Auto-advance to reveal
     setTimeout(() => setPhase('reveal'), 1500);
-  }, [hasAnswered, phase, questions, currentIndex, clearTimer]);
+  }, [hasAnswered, phase, questions, currentIndex, clearTimer, checkAndFetchMore]);
 
   const advanceQuestion = useCallback(() => {
-    // Check if game over (0 lives)
+    // Only end game when lives reach 0
     if (lives <= 0) {
       setPhase('result');
       return;
@@ -143,8 +206,22 @@ export function useSoloGame(): UseSoloGameReturn {
 
     const nextIndex = currentIndex + 1;
 
-    // If we're out of questions, fetch more
+    // Endless survival: if no more questions, check if we have a fetch in flight
     if (nextIndex >= questions.length) {
+      if (_fetchingMore) {
+        // Wait for fetch — retry a bit
+        // For simplicity, try to advance again in a moment
+        setTimeout(() => {
+          setCurrentIndex((prev) => {
+            if (prev < questions.length - 1) return prev + 1;
+            // Still no questions — end game if no more can be loaded
+            setPhase('result');
+            return prev;
+          });
+        }, 2000);
+        return;
+      }
+      // No more questions and not fetching — end game
       setPhase('result');
       return;
     }
@@ -155,7 +232,7 @@ export function useSoloGame(): UseSoloGameReturn {
     setIsCorrect(null);
     setPhase('question');
     startTimer(QUESTION_TIME);
-  }, [lives, currentIndex, questions.length, startTimer]);
+  }, [lives, currentIndex, questions.length, _fetchingMore, startTimer]);
 
   const resetGame = useCallback(() => {
     clearTimer();
@@ -165,11 +242,14 @@ export function useSoloGame(): UseSoloGameReturn {
     setScore(0);
     setLives(MAX_LIVES);
     setStreak(0);
+    setBestStreak(0);
     setAnswers([]);
     setHasAnswered(false);
     setSelectedAnswer(null);
     setIsCorrect(null);
     setError(null);
+    setFetchingMore(false);
+    categoryRef.current = undefined;
   }, [clearTimer]);
 
   // Handle timer hitting zero (no answer = wrong)
@@ -193,10 +273,13 @@ export function useSoloGame(): UseSoloGameReturn {
           },
         ]);
 
+        // Check if we need more questions
+        checkAndFetchMore(currentIndex, questions.length);
+
         setTimeout(() => setPhase('reveal'), 500);
       }
     }
-  }, [timeRemaining, hasAnswered, phase, questions, currentIndex]);
+  }, [timeRemaining, hasAnswered, phase, questions, currentIndex, checkAndFetchMore]);
 
   // Cleanup timer on unmount
   useEffect(() => {

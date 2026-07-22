@@ -107,11 +107,12 @@ async function fetchQuestionsFallback(count: number): Promise<TriviaQuestion[]> 
     return data.results.map((q: any, i: number) => {
       const correctAnswer = atob(q.correct_answer);
       const incorrectAnswers = q.incorrect_answers.map((a: string) => atob(a));
+      const difficulty = atob(q.difficulty);
 
       return {
         id: `opentdb-${i}-${Date.now()}`,
         category: atob(q.category),
-        difficulty: q.difficulty,
+        difficulty: difficulty as 'easy' | 'medium' | 'hard',
         question: atob(q.question),
         correctAnswer,
         incorrectAnswers,
