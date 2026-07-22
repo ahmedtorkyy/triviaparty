@@ -980,6 +980,292 @@ body {
   margin-top: var(--space-md);
 }
 
+/* ====== CREATE ROOM ====== */
+.create-room {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding-bottom: var(--space-xl);
+}
+
+.create-room__title {
+  font-family: var(--font-title);
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: var(--space-sm);
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.settings-label {
+  font-family: var(--font-title);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.settings-toggle {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.settings-option {
+  flex: 1;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-bg-elevated);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  color: var(--color-text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.settings-option:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.settings-option--active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+  font-weight: 600;
+}
+
+.settings-select {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-bg-elevated);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394A3B8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.settings-select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-glow);
+}
+
+.settings-select option {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.create-room__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+/* ====== JOIN ROOM ====== */
+.join-room {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding-top: var(--space-xl);
+}
+
+.join-room__title {
+  font-family: var(--font-title);
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.join-room__input-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.join-room__label {
+  font-family: var(--font-title);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.join-room__input {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-bg-elevated);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  color: var(--color-text);
+  font-family: var(--font-title);
+  font-size: 2rem;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 8px;
+  text-transform: uppercase;
+  transition: border-color var(--transition-fast);
+}
+
+.join-room__input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-glow);
+}
+
+.join-room__error {
+  font-size: 0.85rem;
+  color: var(--color-wrong);
+}
+
+.join-room__hint {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.join-room__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* ====== LOBBY ====== */
+.lobby {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.lobby__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lobby__title {
+  font-family: var(--font-title);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.lobby__code {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--color-bg-card);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-md);
+  border: 2px dashed var(--color-accent);
+}
+
+.lobby__code-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--color-text-secondary);
+}
+
+.lobby__code-value {
+  font-family: var(--font-title);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--color-accent);
+  letter-spacing: 4px;
+}
+
+.lobby__settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm);
+}
+
+.lobby__setting {
+  background: var(--color-bg-card);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lobby__setting-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-secondary);
+}
+
+.lobby__setting-value {
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.lobby__players {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.lobby__players-title {
+  font-family: var(--font-title);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--color-text-secondary);
+}
+
+.lobby__player {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  background: var(--color-bg-card);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+}
+
+.lobby__player-avatar svg {
+  display: block;
+}
+
+.lobby__player-name {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.lobby__host-badge {
+  margin-left: var(--space-xs);
+}
+
+.lobby__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.lobby__waiting {
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  padding: var(--space-md);
+}
+
 /* ====== Utility Classes ====== */
 .sr-only {
   position: absolute;

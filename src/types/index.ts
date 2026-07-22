@@ -18,7 +18,7 @@ export interface AnswerRecord {
 }
 
 // ====== Game State ======
-export type GamePhase = 'idle' | 'countdown' | 'question' | 'reveal' | 'result';
+export type GamePhase = 'idle' | 'countdown' | 'question' | 'reveal' | 'waiting' | 'result';
 
 export interface GameState {
   phase: GamePhase;

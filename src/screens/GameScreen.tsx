@@ -235,6 +235,18 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
   const currentQuestion = game.currentQuestion;
   if (!currentQuestion) return null;
 
+  // Waiting for more questions (endless survival)
+  if (game.phase === 'waiting') {
+    return (
+      <div className="screen game-screen game-screen--loading">
+        <div className="game-screen__loading" role="status" aria-live="polite">
+          <div className="game-screen__spinner" aria-hidden="true" />
+          <p>Loading next question...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="screen game-screen" role="main">
       {/* Screen reader announcement */}

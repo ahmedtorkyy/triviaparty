@@ -8,6 +8,8 @@ interface HomeScreenProps {
   onProfileChange: (profile: PlayerProfile) => void;
   onPlaySolo: () => void;
   onShowCharacterMaker: () => void;
+  onCreateRoom: () => void;
+  onJoinRoom: () => void;
 }
 
 export function HomeScreen({
@@ -15,6 +17,8 @@ export function HomeScreen({
   onProfileChange,
   onPlaySolo,
   onShowCharacterMaker,
+  onCreateRoom,
+  onJoinRoom,
 }: HomeScreenProps) {
   const [dailyClaimed, setDailyClaimed] = useState(false);
 
@@ -79,11 +83,11 @@ export function HomeScreen({
           🎯 Play Solo
         </Button>
 
-        <Button onClick={() => {}} variant="secondary" size="lg" fullWidth disabled>
+        <Button onClick={onCreateRoom} variant="secondary" size="lg" fullWidth>
           🏠 Create Room
         </Button>
 
-        <Button onClick={() => {}} variant="secondary" size="lg" fullWidth disabled>
+        <Button onClick={onJoinRoom} variant="secondary" size="lg" fullWidth>
           🔑 Join Room
         </Button>
 
@@ -95,13 +99,6 @@ export function HomeScreen({
           👤 Profile
         </Button>
       </div>
-
-      {/* Coming soon note */}
-      <p className="home__note" role="note">
-        Create Room, Join Room, Shop, and Profile coming in future updates.
-        <br />
-        Play Solo is available now!
-      </p>
     </div>
   );
 }
