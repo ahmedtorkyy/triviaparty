@@ -1,32 +1,50 @@
-# React + TypeScript + Vite
+# TriviaParty 🎯
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A free online multiplayer trivia party game. Friends join with a room code, answer live-synced questions, battle in surprise challenges, and earn coins for power-ups. Arabic and English.
 
-Currently, two official plugins are available:
+Built by **Ahmed Torky (Torky)** for his 1M+ followers.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Tech Stack
 
-## React Compiler
+- **Frontend:** React + Vite + TypeScript
+- **Hosting:** Cloudflare Pages
+- **Realtime:** Supabase (coming in Phase 2)
+- **Questions:** The Trivia API + Open Trivia Database (fallback)
+- **AI:** Google Gemini (Phase 5)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Development
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Build
+
+```bash
+npm run build
+npm run preview
+```
+
+## Current Phase
+
+**Phase 1: Solo Survival** — Play solo survival mode with live API questions, dark theme, character maker, and full accessibility.
+
+## Roadmap
+
+| Phase | Feature |
+|-------|---------|
+| 1 | ✅ Solo Survival (live) |
+| 2 | Multiplayer rooms + lobby |
+| 3 | Economy, shop, power-ups |
+| 4 | Challenges (Tap Frenzy, Shake It, Blow Up, Lucky Box) |
+| 5 | Arabic UI + RTL, AI questions, Survival multiplayer |
+| 6 | Polish, sound, accessibility, share cards, launch |
+
+## Accessibility
+
+Built with NVDA screen reader in mind from day one:
+- Semantic HTML, ARIA labels, keyboard navigation
+- Screen-reader-friendly character maker
+- Arablic RTL support ready
+- Focus management throughout
