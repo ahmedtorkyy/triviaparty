@@ -1,14 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { PlayerProfile } from './types';
-import type { RoomSettings } from './types/multiplayer';
+import type { RoomSettings, RoomPlayer, PlayerCharacterSnapshot } from './types/multiplayer';
 import { loadProfile, saveProfile } from './services/storage';
+import { getRoomService } from './services/roomService';
 import { CharacterMaker } from './screens/CharacterMaker';
 import { HomeScreen } from './screens/HomeScreen';
 import { GameScreen } from './screens/GameScreen';
 import { CreateRoomScreen } from './screens/CreateRoomScreen';
 import { JoinRoomScreen } from './screens/JoinRoomScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
-import { isSupabaseConfigured } from './services/supabase';
+import { MultiplayerGameScreen } from './screens/MultiplayerGameScreen';
 
 type AppScreen =
   | 'loading'
@@ -17,13 +18,19 @@ type AppScreen =
   | 'game_solo'
   | 'create_room'
   | 'join_room'
-  | 'lobby';
+  | 'lobby'
+  | 'mp_game';
 
 function App() {
   const [screen, setScreen] = useState<AppScreen>('loading');
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [roomCode, setRoomCode] = useState<string>('');
   const [roomSettings, setRoomSettings] = useState<RoomSettings | null>(null);
+  const [roomPlayers, setRoomPlayers] = useState<RoomPlayer[]>([]);
+  const [isHost, setIsHost] = useState(false);
+  const [playerCharacterSnapshot, setPlayerCharacterSnapshot] = useState<PlayerCharacterSnapshot | null>(null);
+
+  const roomService = getRoomService();
 
   // Load profile on mount
   useEffect(() => {
@@ -47,43 +54,156 @@ function App() {
     setScreen('home');
   };
 
-  // Multiplayer handlers
-  const handleCreateRoom = () => {
-    if (!isSupabaseConfigured()) {
-      // For now, skip to lobby with a fake code for UI testing
-      // Will need Supabase credentials for real multiplayer
-      setRoomCode('TEST');
-      setRoomSettings(null);
-      setScreen('lobby');
-      return;
+  // Refresh player list from presence
+  const refreshPlayers = useCallback(() => {
+    if (!roomService.isConnected) return;
+    const state = (roomService as any).channel?.presenceState();
+    if (!state) return;
+    const players: RoomPlayer[] = [];
+    let foundHost = false;
+    for (const [id, presences] of Object.entries(state)) {
+      if ((presences as any[]).length > 0) {
+        const p = (presences as any[])[0];
+        const isPlayerHost = p.isHost || (!foundHost && id === profile?.playerId);
+        players.push({
+          id,
+          nickname: p.nickname,
+          character: p.character,
+          isHost: isPlayerHost,
+          score: p.score || 0,
+          lives: p.lives || 3,
+          isEliminated: p.isEliminated || false,
+          hasAnswered: p.hasAnswered || false,
+        });
+        if (isPlayerHost) foundHost = true;
+      }
     }
+    setRoomPlayers(players);
+  }, [roomService, profile?.playerId]);
+
+  // ---- Create Room ----
+  const handleCreateRoom = () => {
     setScreen('create_room');
   };
 
-  const handleRoomCreated = (code: string, settings: RoomSettings) => {
-    setRoomCode(code);
-    setRoomSettings(settings);
-    setScreen('lobby');
+  const handleRoomCreated = async (settings: RoomSettings) => {
+    if (!profile) return;
+    const snapshot: PlayerCharacterSnapshot = {
+      skinTone: profile.character.skinTone,
+      hairStyle: profile.character.hairStyle,
+      hairColor: profile.character.hairColor,
+      eyes: profile.character.eyes,
+      accessory: profile.character.accessory,
+      backgroundColor: profile.character.backgroundColor,
+    };
+    setPlayerCharacterSnapshot(snapshot);
+
+    try {
+      const code = await roomService.create(settings, {
+        id: profile.playerId,
+        nickname: profile.nickname,
+        character: snapshot,
+        isHost: true,
+        score: 0,
+        lives: 3,
+        isEliminated: false,
+        hasAnswered: false,
+      });
+      setRoomCode(code);
+      setRoomSettings(settings);
+      setIsHost(true);
+      setRoomPlayers([
+        {
+          id: profile.playerId,
+          nickname: profile.nickname,
+          character: snapshot,
+          isHost: true,
+          score: 0,
+          lives: 3,
+          isEliminated: false,
+          hasAnswered: false,
+        },
+      ]);
+      setScreen('lobby');
+    } catch (err) {
+      console.error('Failed to create room:', err);
+      setScreen('home');
+    }
   };
 
+  // ---- Join Room ----
   const handleJoinRoom = () => {
     setScreen('join_room');
   };
 
-  const handleRoomJoined = (code: string) => {
-    setRoomCode(code);
-    setScreen('lobby');
+  const handleRoomJoined = async (code: string) => {
+    if (!profile) return;
+    const snapshot: PlayerCharacterSnapshot = {
+      skinTone: profile.character.skinTone,
+      hairStyle: profile.character.hairStyle,
+      hairColor: profile.character.hairColor,
+      eyes: profile.character.eyes,
+      accessory: profile.character.accessory,
+      backgroundColor: profile.character.backgroundColor,
+    };
+    setPlayerCharacterSnapshot(snapshot);
+
+    try {
+      const joined = await roomService.join(code, {
+        id: profile.playerId,
+        nickname: profile.nickname,
+        character: snapshot,
+        isHost: false,
+        score: 0,
+        lives: 3,
+        isEliminated: false,
+        hasAnswered: false,
+      });
+      if (!joined) {
+        console.error('Room not found');
+        return;
+      }
+      setRoomCode(code);
+      setIsHost(false);
+      // Players will populate via presence sync
+      setScreen('lobby');
+
+      // Set a timer to refresh players after joining (presence sync takes a moment)
+      setTimeout(refreshPlayers, 1500);
+    } catch (err) {
+      console.error('Failed to join room:', err);
+      setScreen('home');
+    }
+  };
+
+  // ---- Lobby ----
+  useEffect(() => {
+    if (screen === 'lobby') {
+      // Poll for presence sync
+      const interval = setInterval(refreshPlayers, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [screen, refreshPlayers]);
+
+  const handleStartGame = () => {
+    setScreen('mp_game');
   };
 
   const handleLeaveRoom = () => {
+    roomService.leave();
     setRoomCode('');
     setRoomSettings(null);
+    setRoomPlayers([]);
+    setIsHost(false);
     setScreen('home');
   };
 
-  const handleStartGame = () => {
-    // Phase 2: Start multiplayer game
-    // For now, back to home
+  const handleLeaveGame = () => {
+    roomService.leave();
+    setRoomCode('');
+    setRoomSettings(null);
+    setRoomPlayers([]);
+    setIsHost(false);
     setScreen('home');
   };
 
@@ -126,7 +246,9 @@ function App() {
 
       {screen === 'create_room' && (
         <CreateRoomScreen
-          onRoomCreated={handleRoomCreated}
+          onRoomCreated={(_code, settings) => {
+            handleRoomCreated(settings);
+          }}
           onBack={() => setScreen('home')}
         />
       )}
@@ -138,26 +260,27 @@ function App() {
         />
       )}
 
-      {screen === 'lobby' && (
+      {screen === 'lobby' && roomSettings && (
         <LobbyScreen
           code={roomCode}
-          settings={roomSettings || { mode: 'normal', questionLanguage: 'en', questionSource: 'categories', questionCount: 10, timerSeconds: 15, challengesEnabled: true }}
-          players={[
-            {
-              id: profile.playerId,
-              nickname: profile.nickname,
-              character: profile.character,
-              isHost: true,
-              score: 0,
-              lives: 3,
-              isEliminated: false,
-              hasAnswered: false,
-            },
-          ]}
-          isHost={true}
+          settings={roomSettings}
+          players={roomPlayers}
+          isHost={isHost}
           gameInProgress={false}
           onStartGame={handleStartGame}
           onLeave={handleLeaveRoom}
+        />
+      )}
+
+      {screen === 'mp_game' && roomSettings && playerCharacterSnapshot && (
+        <MultiplayerGameScreen
+          playerId={profile.playerId}
+          playerNickname={profile.nickname}
+          playerCharacter={playerCharacterSnapshot}
+          settings={roomSettings}
+          isHost={isHost}
+          roomCode={roomCode}
+          onLeave={handleLeaveGame}
         />
       )}
     </div>

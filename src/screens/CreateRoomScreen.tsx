@@ -6,7 +6,7 @@ import {
   VOTING_QUESTION_COUNTS,
   TIMER_OPTIONS,
 } from '../types/multiplayer';
-import { generateRoomCode } from '../services/roomService';
+import { generateRoomCode } from '../services/roomUtils';
 import { Button } from '../components/ui/Button';
 
 interface CreateRoomScreenProps {
