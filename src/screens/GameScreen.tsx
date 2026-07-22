@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSoloGame } from '../hooks/useSoloGame';
-import type { PlayerProfile } from '../types';
+import type { PlayerProfile, PowerUpType } from '../types';
 import { updateStats } from '../services/storage';
 import { CATEGORIES, CATEGORY_ANY } from '../services/triviaApi';
 import { TimerRing } from '../components/ui/TimerRing';
 import { QuestionCard } from '../components/game/QuestionCard';
 import { GameHud } from '../components/game/GameHud';
 import { RevealScreen } from '../components/game/RevealScreen';
+import { PowerUpSheet } from '../components/game/PowerUpSheet';
 import { Button } from '../components/ui/Button';
 
 interface GameScreenProps {
@@ -22,6 +23,9 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
   const [announcement, setAnnouncement] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('any');
   const [newBestStreak, setNewBestStreak] = useState(false);
+  const [showPowerUpSheet, setShowPowerUpSheet] = useState(false);
+  const [usedThisQuestion, setUsedThisQuestion] = useState<PowerUpType[]>([]);
+  const [removedAnswers, setRemovedAnswers] = useState<string[]>([]);
   const prevPhaseRef = useRef(game.phase);
   const announcementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -33,6 +37,8 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
     if (game.phase === 'question' && prev !== 'question') {
       setShowReveal(false);
       setShowResult(false);
+      setUsedThisQuestion([]);
+      setRemovedAnswers([]);
       if (game.currentQuestion) {
         setAnnouncement(`Question ${game.currentIndex + 1}. ${game.currentQuestion.question}`);
       }
@@ -82,6 +88,21 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
 
   const handleNext = useCallback(() => {
     game.advanceQuestion();
+  }, [game]);
+
+  const handleActivatePowerUp = useCallback((type: PowerUpType) => {
+    setUsedThisQuestion((prev) => [...prev, type]);
+    if (type === 'fifty_fifty' && game.currentQuestion) {
+      // Remove two random wrong answers
+      const wrongs = game.currentQuestion.allAnswers.filter(
+        (a) => a !== game.currentQuestion!.correctAnswer
+      );
+      const shuffled = [...wrongs].sort(() => Math.random() - 0.5);
+      const toRemove = shuffled.slice(0, 2);
+      setRemovedAnswers(toRemove);
+    } else if (type === 'extra_time') {
+      game.addTime(10);
+    }
   }, [game]);
 
   // Loading state
@@ -278,15 +299,38 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
           isLastQuestion={game.lives <= 0 || game.currentIndex >= game.totalQuestions - 1}
         />
       ) : (
-        <QuestionCard
-          question={currentQuestion}
-          questionNumber={game.currentIndex + 1}
-          totalQuestions={game.totalQuestions}
-          onAnswer={game.submitAnswer}
-          disabled={game.hasAnswered}
-          selectedAnswer={game.selectedAnswer}
-          correctAnswer={game.isCorrect ? currentQuestion.correctAnswer : null}
-          showResult={false}
+        <>
+          <div className="game-screen__powerup-bar">
+            <button
+              className="game-screen__powerup-btn"
+              onClick={() => setShowPowerUpSheet(true)}
+              disabled={game.hasAnswered}
+              aria-label="Power-ups"
+            >
+              ⚡
+            </button>
+          </div>
+          <QuestionCard
+            question={currentQuestion}
+            questionNumber={game.currentIndex + 1}
+            totalQuestions={game.totalQuestions}
+            onAnswer={game.submitAnswer}
+            disabled={game.hasAnswered}
+            selectedAnswer={game.selectedAnswer}
+            correctAnswer={game.isCorrect ? currentQuestion.correctAnswer : null}
+            showResult={false}
+            removedAnswers={removedAnswers}
+          />
+        </>
+      )}
+
+      {showPowerUpSheet && (
+        <PowerUpSheet
+          profile={profile}
+          onProfileChange={onProfileChange}
+          onActivate={handleActivatePowerUp}
+          onClose={() => setShowPowerUpSheet(false)}
+          usedThisQuestion={usedThisQuestion}
         />
       )}
     </div>

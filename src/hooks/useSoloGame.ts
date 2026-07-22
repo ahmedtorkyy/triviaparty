@@ -28,6 +28,7 @@ interface UseSoloGameReturn {
   submitAnswer: (answer: string) => void;
   advanceQuestion: () => void;
   resetGame: () => void;
+  addTime: (seconds: number) => void;
 }
 
 export function useSoloGame(): UseSoloGameReturn {
@@ -61,6 +62,10 @@ export function useSoloGame(): UseSoloGameReturn {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+  }, []);
+
+  const addTime = useCallback((seconds: number) => {
+    setTimeRemaining((prev) => prev + seconds);
   }, []);
 
   const startTimer = useCallback((duration: number) => {
@@ -333,5 +338,6 @@ export function useSoloGame(): UseSoloGameReturn {
     submitAnswer,
     advanceQuestion,
     resetGame,
+    addTime,
   };
 }

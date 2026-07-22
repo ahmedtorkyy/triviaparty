@@ -29,6 +29,7 @@ export function createDefaultProfile(): PlayerProfile {
     },
     lastDailyBonus: null,
     playerId: generatePlayerId(),
+    powerUpInventory: {},
   };
 }
 
@@ -40,7 +41,12 @@ export function loadProfile(): PlayerProfile {
       saveProfile(profile);
       return profile;
     }
-    return JSON.parse(raw) as PlayerProfile;
+    const parsed = JSON.parse(raw);
+    // Migration: old profiles may not have powerUpInventory
+    if (!parsed.powerUpInventory) {
+      parsed.powerUpInventory = {};
+    }
+    return parsed as PlayerProfile;
   } catch {
     return createDefaultProfile();
   }
@@ -80,7 +86,42 @@ export function updateStats(
       gamesPlayed: profile.stats.gamesPlayed + 1,
     },
     coins: profile.coins + correct * 50, // Solo earns half rate: 50 coins per correct
+    powerUpInventory: { ...profile.powerUpInventory },
   };
   saveProfile(updated);
   return updated;
 }
+
+/** Buy a power-up, returns new profile or null if insufficient coins */
+export function buyPowerUp(profile: PlayerProfile, type: 'fifty_fifty' | 'extra_time', price: number): PlayerProfile | null {
+  if (profile.coins < price) return null;
+  const inv = { ...profile.powerUpInventory };
+  inv[type] = (inv[type] || 0) + 1;
+  const updated = { ...profile, coins: profile.coins - price, powerUpInventory: inv };
+  saveProfile(updated);
+  return updated;
+}
+
+/** Use (consume) a power-up, returns new profile or null if none owned */
+export function consumePowerUp(profile: PlayerProfile, type: 'fifty_fifty' | 'extra_time'): PlayerProfile | null {
+  const inv = { ...profile.powerUpInventory };
+  if (!inv[type] || inv[type]! < 1) return null;
+  inv[type]! -= 1;
+  const updated = { ...profile, powerUpInventory: inv };
+  saveProfile(updated);
+  return updated;
+}
+
+/** Count owned power-ups */
+export function getPowerUpCount(profile: PlayerProfile, type: 'fifty_fifty' | 'extra_time'): number {
+  return profile.powerUpInventory[type] || 0;
+}
+
+/** Award coins for multiplayer correct answer */
+export function awardMultiplayerCoins(profile: PlayerProfile, correctCount: number): PlayerProfile {
+  const earned = correctCount * 100;
+  const updated = { ...profile, coins: profile.coins + earned };
+  saveProfile(updated);
+  return updated;
+}
+

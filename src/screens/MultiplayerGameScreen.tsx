@@ -1,9 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useMultiplayerGame } from '../hooks/useMultiplayerGame';
 import type { RoomSettings, PlayerCharacterSnapshot, RoomPlayer } from '../types/multiplayer';
+import type { PlayerProfile, PowerUpType } from '../types';
 import { QuestionCard } from '../components/game/QuestionCard';
 import { GameHud } from '../components/game/GameHud';
 import { RevealScreen } from '../components/game/RevealScreen';
+import { PowerUpSheet } from '../components/game/PowerUpSheet';
 import { TimerRing } from '../components/ui/TimerRing';
 import { Button } from '../components/ui/Button';
 import { PodiumScreen } from './PodiumScreen';
@@ -18,8 +20,8 @@ interface MultiplayerGameScreenProps {
   roomCode: string;
   onLeave: () => void;
   onBackToLobby: () => void;
-  onProfileChange: (profile: import('../types').PlayerProfile) => void;
-  profile: import('../types').PlayerProfile;
+  onProfileChange: (profile: PlayerProfile) => void;
+  profile: PlayerProfile;
 }
 
 export function MultiplayerGameScreen({
@@ -49,6 +51,34 @@ export function MultiplayerGameScreen({
     isHost,
     roomCode,
   });
+
+  const [showPowerUpSheet, setShowPowerUpSheet] = useState(false);
+  const [usedThisQuestion, setUsedThisQuestion] = useState<PowerUpType[]>([]);
+  const [removedAnswers, setRemovedAnswers] = useState<string[]>([]);
+  const [extraTimeSeconds, setExtraTimeSeconds] = useState(0);
+
+  // Reset power-ups on new question
+  useEffect(() => {
+    if (state.phase === 'question') {
+      setUsedThisQuestion([]);
+      setRemovedAnswers([]);
+      setExtraTimeSeconds(0);
+    }
+  }, [state.phase, state.questionIndex]);
+
+  const handleActivatePowerUp = (type: PowerUpType) => {
+    setUsedThisQuestion((prev) => [...prev, type]);
+    if (type === 'fifty_fifty' && state.currentQuestion) {
+      const wrongs = state.currentQuestion.allAnswers.filter(
+        (a) => a !== state.currentQuestion!.correctAnswer
+      );
+      const shuffled = [...wrongs].sort(() => Math.random() - 0.5);
+      const toRemove = shuffled.slice(0, 2);
+      setRemovedAnswers(toRemove);
+    } else if (type === 'extra_time') {
+      setExtraTimeSeconds(10);
+    }
+  };
 
   const handleLeave = () => {
     leaveRoom();
@@ -166,8 +196,25 @@ export function MultiplayerGameScreen({
       {state.phase === 'question' && state.currentQuestion && !state.hasAnswered && (
         <div className="mp-game__question-area">
           <div className="mp-game__timer-row">
-            <TimerRing seconds={state.timeRemaining} total={timerSeconds} />
+            <TimerRing seconds={state.timeRemaining + extraTimeSeconds} total={timerSeconds + extraTimeSeconds} />
           </div>
+
+          {/* Power-up button */}
+          <div className="game-screen__powerup-bar">
+            <button
+              className="game-screen__powerup-btn"
+              onClick={() => setShowPowerUpSheet(true)}
+              aria-label="Power-ups"
+            >
+              ⚡
+            </button>
+          </div>
+
+          {extraTimeSeconds > 0 && (
+            <div className="mp-game__extra-time-note" role="status">
+              ⏱ Extra Time active (+{extraTimeSeconds}s)
+            </div>
+          )}
 
           {/* Answered indicator */}
           <div className="mp-game__answered-indicator" aria-live="polite">
@@ -183,6 +230,7 @@ export function MultiplayerGameScreen({
             correctAnswer={null}
             showResult={false}
             onAnswer={submitAnswer}
+            removedAnswers={removedAnswers}
           />
         </div>
       )}
@@ -190,13 +238,29 @@ export function MultiplayerGameScreen({
       {state.phase === 'question' && state.hasAnswered && (
         <div className="mp-game__waiting-answer" role="status" aria-live="polite">
           <p>Waiting for other players...</p>
-          <TimerRing seconds={state.timeRemaining} total={timerSeconds} />
+          <TimerRing seconds={state.timeRemaining + extraTimeSeconds} total={timerSeconds + extraTimeSeconds} />
+
+          {extraTimeSeconds > 0 && (
+            <div className="mp-game__extra-time-note" role="status">
+              ⏱ Extra Time active (+{extraTimeSeconds}s)
+            </div>
+          )}
 
           {/* Answered indicator */}
           <div className="mp-game__answered-indicator">
             {answeredIndicator(state.answeredPlayerIds, state.players)}
           </div>
         </div>
+      )}
+
+      {showPowerUpSheet && (
+        <PowerUpSheet
+          profile={profile}
+          onProfileChange={onProfileChange}
+          onActivate={handleActivatePowerUp}
+          onClose={() => setShowPowerUpSheet(false)}
+          usedThisQuestion={usedThisQuestion}
+        />
       )}
 
       {state.phase === 'reveal' && state.currentResults && state.currentQuestion && (

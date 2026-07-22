@@ -11,6 +11,9 @@ import { JoinRoomScreen } from './screens/JoinRoomScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { MultiplayerGameScreen } from './screens/MultiplayerGameScreen';
 
+import { ShopScreen } from './screens/ShopScreen';
+import { ProfileScreen } from './screens/ProfileScreen';
+
 type AppScreen =
   | 'loading'
   | 'character'
@@ -19,7 +22,9 @@ type AppScreen =
   | 'create_room'
   | 'join_room'
   | 'lobby'
-  | 'mp_game';
+  | 'mp_game'
+  | 'shop'
+  | 'profile';
 
 function App() {
   const [screen, setScreen] = useState<AppScreen>('loading');
@@ -229,6 +234,23 @@ function App() {
           onShowCharacterMaker={() => setScreen('character')}
           onCreateRoom={handleCreateRoom}
           onJoinRoom={handleJoinRoom}
+          onShowShop={() => setScreen('shop')}
+          onShowProfile={() => setScreen('profile')}
+        />
+      )}
+
+      {screen === 'shop' && (
+        <ShopScreen
+          profile={profile}
+          onProfileChange={handleProfileChange}
+          onBack={() => setScreen('home')}
+        />
+      )}
+
+      {screen === 'profile' && (
+        <ProfileScreen
+          profile={profile}
+          onBack={() => setScreen('home')}
         />
       )}
 

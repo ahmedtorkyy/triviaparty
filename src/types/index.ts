@@ -56,6 +56,8 @@ export interface PlayerProfile {
   stats: PlayerStats;
   lastDailyBonus: string | null; // ISO date string
   playerId: string;
+  /** Power-up inventory keyed by type */
+  powerUpInventory: Partial<Record<PowerUpType, number>>;
 }
 
 export interface PlayerStats {

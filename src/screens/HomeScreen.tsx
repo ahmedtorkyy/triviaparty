@@ -10,6 +10,8 @@ interface HomeScreenProps {
   onShowCharacterMaker: () => void;
   onCreateRoom: () => void;
   onJoinRoom: () => void;
+  onShowShop: () => void;
+  onShowProfile: () => void;
 }
 
 export function HomeScreen({
@@ -19,6 +21,8 @@ export function HomeScreen({
   onShowCharacterMaker,
   onCreateRoom,
   onJoinRoom,
+  onShowShop,
+  onShowProfile,
 }: HomeScreenProps) {
   const [dailyClaimed, setDailyClaimed] = useState(false);
 
@@ -30,7 +34,7 @@ export function HomeScreen({
       const timer = setTimeout(() => setDailyClaimed(false), 3000);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [profile, onProfileChange]);
 
   return (
     <div className="screen home">
@@ -91,11 +95,11 @@ export function HomeScreen({
           🔑 Join Room
         </Button>
 
-        <Button onClick={() => {}} variant="ghost" size="md" fullWidth disabled>
+        <Button onClick={onShowShop} variant="ghost" size="md" fullWidth>
           🛒 Shop
         </Button>
 
-        <Button onClick={() => {}} variant="ghost" size="md" fullWidth disabled>
+        <Button onClick={onShowProfile} variant="ghost" size="md" fullWidth>
           👤 Profile
         </Button>
       </div>

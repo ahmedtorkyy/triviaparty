@@ -9,6 +9,7 @@ interface QuestionCardProps {
   selectedAnswer: string | null;
   correctAnswer: string | null;
   showResult: boolean;
+  removedAnswers?: string[];
 }
 
 const ANSWER_COLORS = ['#FF6B35', '#3B82F6', '#F59E0B', '#10B981'];
@@ -23,7 +24,11 @@ export function QuestionCard({
   selectedAnswer,
   correctAnswer,
   showResult,
+  removedAnswers,
 }: QuestionCardProps) {
+  const visibleAnswers = question.allAnswers.filter(
+    (a) => !removedAnswers?.includes(a)
+  );
   return (
     <div className="question-card" role="region" aria-label={`Question ${questionNumber}`}>
       <div className="question-card__meta">
@@ -36,7 +41,7 @@ export function QuestionCard({
       <h2 className="question-card__text">{question.question}</h2>
 
       <div className="question-card__answers" role="group" aria-label="Answer options">
-        {question.allAnswers.map((answer, index) => {
+        {visibleAnswers.map((answer, index) => {
           const isSelected = selectedAnswer === answer;
           const isCorrectAnswer = showResult && answer === correctAnswer;
           const isWrongSelected = showResult && isSelected && answer !== correctAnswer;
