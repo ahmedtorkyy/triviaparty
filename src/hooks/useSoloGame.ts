@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { TriviaQuestion, AnswerRecord, GamePhase } from '../types';
 import { fetchQuestions } from '../services/triviaApi';
+import { playSound } from '../services/useSound';
 
 const MAX_LIVES = 3;
 const QUESTION_TIME = 15; // seconds
@@ -56,6 +57,8 @@ export function useSoloGame(): UseSoloGameReturn {
   // Track the questions length at the time we entered 'waiting',
   // so the effect can detect when new questions arrive
   const waitingCountRef = useRef(0);
+  /** Track which second we last played tick on, to avoid stacking */
+  const lastTickSecondRef = useRef<number>(-1);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -80,6 +83,17 @@ export function useSoloGame(): UseSoloGameReturn {
         if (next <= 0) {
           clearTimer();
           return 0;
+        }
+        // Tick once per second during last 5 seconds
+        const wholeSec = Math.ceil(next);
+        if (wholeSec <= 5 && wholeSec >= 2 && wholeSec !== lastTickSecondRef.current) {
+          lastTickSecondRef.current = wholeSec;
+          playSound('tick');
+        }
+        // Countdown on final 1 second
+        if (Math.ceil(next) === 1 && wholeSec !== lastTickSecondRef.current) {
+          lastTickSecondRef.current = 1;
+          playSound('countdown');
         }
         return Math.round(next * 10) / 10;
       });

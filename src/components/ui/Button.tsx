@@ -1,4 +1,5 @@
 import React from 'react';
+import { playSound } from '../../services/useSound';
 
 interface ButtonProps {
   onClick: () => void;
@@ -26,7 +27,7 @@ export function Button({
   return (
     <button
       className={`${baseClass} ${variantClass} ${sizeClass} ${fullWidth ? `${baseClass}--full` : ''}`}
-      onClick={onClick}
+      onClick={() => { playSound('click'); onClick(); }}
       disabled={disabled}
       aria-label={ariaLabel}
     >

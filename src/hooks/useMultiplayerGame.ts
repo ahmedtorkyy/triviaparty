@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { TriviaQuestion } from '../types';
+import { playSound } from '../services/useSound';
 import type {
   RoomSettings,
   RoomPlayer,
@@ -120,6 +121,8 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
     }
   }, []);
 
+  const lastTickSecondRef = useRef<number>(-1);
+
   // ---- Conductor: the player who advances the game ----
   const computeIsConductor = useCallback(() => {
     const conductorId = computeConductorId(players);
@@ -133,6 +136,16 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
     const tick = () => {
       const remaining = Math.max(0, (endTimestampRef.current - Date.now()) / 1000);
       setTimeRemaining(Math.round(remaining * 10) / 10);
+      // Tick/countdown sounds
+      const wholeSec = Math.ceil(remaining);
+      if (wholeSec <= 5 && wholeSec >= 2 && wholeSec !== lastTickSecondRef.current) {
+        lastTickSecondRef.current = wholeSec;
+        playSound('tick');
+      }
+      if (Math.ceil(remaining) === 1 && wholeSec !== lastTickSecondRef.current) {
+        lastTickSecondRef.current = 1;
+        playSound('countdown');
+      }
       if (remaining <= 0) clearTimer();
     };
     tick();
@@ -545,7 +558,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         setPlayers((prev) => {
           const existing = prev.findIndex((p) => p.id === player.id);
           if (existing >= 0) {
-            // Returning player: PRESERVE their score, update other fields
+            // Returning player: PRESERVE their score
             const updated = [...prev];
             updated[existing] = {
               ...updated[existing],
@@ -555,11 +568,11 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
               lives: player.lives,
               isEliminated: player.isEliminated,
               hasAnswered: player.hasAnswered,
-              // score: DO NOT overwrite — keep the known score
-              // settings/gameRunning: don't store in players array, we track separately
             };
             return updated;
           }
+          // New player joined — play sound
+          playSound('join');
           return [...prev, player];
         });
       },
