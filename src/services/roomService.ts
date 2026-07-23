@@ -28,6 +28,9 @@ export interface RoomEventCallbacks {
   onStateSnapshot?: (payload: StateSnapshotPayload) => void;
   onError?: (error: string) => void;
   onExtraTime?: (playerId: string) => void;
+  onChallengeStart?: (payload: import('../types/challenges').ChallengeStartPayload) => void;
+  onChallengeReveal?: (payload: import('../types/challenges').ChallengeRevealPayload) => void;
+  onChallengeResult?: (playerId: string, score: number, tiebreaker?: number) => void;
 }
 
 // ====== Room Service ======
@@ -283,6 +286,36 @@ export class RoomService {
     });
   }
 
+  /** Conductor broadcasts challenge start */
+  async broadcastChallengeStart(payload: import('../types/challenges').ChallengeStartPayload) {
+    this._ensureChannel();
+    await this.channel!.send({
+      type: 'broadcast',
+      event: 'challenge_start',
+      payload,
+    });
+  }
+
+  /** Conductor broadcasts challenge results */
+  async broadcastChallengeReveal(payload: import('../types/challenges').ChallengeRevealPayload) {
+    this._ensureChannel();
+    await this.channel!.send({
+      type: 'broadcast',
+      event: 'challenge_reveal',
+      payload,
+    });
+  }
+
+  /** Player submits challenge result */
+  async submitChallengeResult(playerId: string, score: number, tiebreaker?: number) {
+    this._ensureChannel();
+    await this.channel!.send({
+      type: 'broadcast',
+      event: 'challenge_result',
+      payload: { playerId, score, tiebreaker },
+    });
+  }
+
   // ---- Player submits answer ----
   async submitAnswer(answer: PlayerAnswer) {
     this._ensureChannel();
@@ -360,6 +393,18 @@ export class RoomService {
 
     this.channel.on('broadcast', { event: 'powerup_extratime' }, ({ payload }) => {
       this.callbacks.onExtraTime?.(payload.playerId);
+    });
+
+    this.channel.on('broadcast', { event: 'challenge_start' }, ({ payload }) => {
+      this.callbacks.onChallengeStart?.(payload);
+    });
+
+    this.channel.on('broadcast', { event: 'challenge_reveal' }, ({ payload }) => {
+      this.callbacks.onChallengeReveal?.(payload);
+    });
+
+    this.channel.on('broadcast', { event: 'challenge_result' }, ({ payload }) => {
+      this.callbacks.onChallengeResult?.(payload.playerId, payload.score, payload.tiebreaker);
     });
   }
 }

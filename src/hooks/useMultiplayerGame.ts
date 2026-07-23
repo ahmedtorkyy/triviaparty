@@ -24,7 +24,7 @@ interface UseMultiplayerGameOptions {
   onExtraTimeUsed?: (playerId: string, nickname: string) => void;
 }
 
-export type MultiplayerPhase = 'lobby' | 'countdown' | 'question' | 'reveal' | 'podium' | 'waiting';
+export type MultiplayerPhase = 'lobby' | 'countdown' | 'question' | 'reveal' | 'podium' | 'waiting' | 'challenge';
 
 export interface MultiplayerGameState {
   phase: MultiplayerPhase;
@@ -48,6 +48,10 @@ export interface MultiplayerGameState {
   myPodiumRank: number;
   /** Whether I am a late joiner / spectator waiting for next game */
   isLateJoiner: boolean;
+  /** Current challenge if phase === 'challenge' */
+  currentChallenge: import('../types/challenges').ChallengeStartPayload | null;
+  /** Challenge reveal results */
+  challengeResults: import('../types/challenges').ChallengeResult[] | null;
 }
 
 export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
@@ -74,6 +78,8 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   const [podiumEntries, setPodiumEntries] = useState<PodiumEntry[]>([]);
   const [myPodiumRank, setMyPodiumRank] = useState(0);
   const [isLateJoiner, setIsLateJoiner] = useState(false);
+  const [currentChallenge, setCurrentChallenge] = useState<import('../types/challenges').ChallengeStartPayload | null>(null);
+  const [challengeResults, setChallengeResults] = useState<import('../types/challenges').ChallengeResult[] | null>(null);
 
   const roomService = getRoomService();
   const gameQuestionsRef = useRef<TriviaQuestion[]>([]);
@@ -101,6 +107,10 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   const lastRevealRef = useRef<RevealResult | null>(null);
   /** Track players who used Extra Time and their extended deadlines per question */
   const extendedDeadlinesRef = useRef<Map<string, number>>(new Map());
+  /** Challenge slots for this game */
+  const challengeSlotsRef = useRef<import('../types/challenges').ChallengeSlot[]>([]);
+  /** Collected challenge results (conductor side) */
+  const challengeResultCollectorRef = useRef<Map<string, number>>(new Map());
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -215,6 +225,20 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
       } as GameStartPayload);
       // Conductor updates presence: gameRunning = true, settings
       roomService.updatePresence({ gameRunning: true, settings: options.settings });
+
+      // Generate challenge slots
+      if (options.settings.challengesEnabled) {
+        const { getChallengeSlots, pickChallengeTypes } = await import('../types/challenges');
+        const slots = getChallengeSlots(options.settings.questionCount, Date.now());
+        const types = pickChallengeTypes(slots, Date.now() + 1);
+        challengeSlotsRef.current = slots.map((slot, i) => ({
+          afterQuestionIndex: slot,
+          type: types[i],
+          seed: Date.now() + i * 1000,
+        }));
+      } else {
+        challengeSlotsRef.current = [];
+      }
     } catch (err) {
       console.error('Failed to start game:', err);
     }
@@ -341,34 +365,134 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
     }
   }, [phase]);
 
-  // ========== Conductor: auto-advance after reveal ==========
+  // ========== Conductor: advance challenge when time expires or all submitted ==========
   useEffect(() => {
-    if (!computeIsConductor() || phase !== 'reveal') return;
+    if (!computeIsConductor() || phase !== 'challenge') return;
 
-    const timer = setTimeout(async () => {
-      const nextIndex = questionIndex + 1;
-      if (nextIndex >= totalQuestions) {
-        // Broadcast podium with TRUE correct counts
-        const sorted = [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
-        const entries: PodiumEntry[] = sorted.map((p, i) => {
-          const correctCount = correctCountsRef.current.get(p.id) || 0;
-          return {
+    const allPresent = players.filter((p) => !p.isEliminated);
+    const allSubmitted = allPresent.length > 0 && allPresent.every((p) => challengeResultCollectorRef.current.has(p.id));
+    const timerExpired = timeRemaining <= 0;
+
+    if ((timerExpired || allSubmitted) && !revealSentRef.current) {
+      revealSentRef.current = true;
+
+      // Build results from collected scores
+      const scores = allPresent.map((p) => {
+        const score = challengeResultCollectorRef.current.get(p.id) || 0;
+        return { playerId: p.id, score };
+      });
+
+      // Compute rankings inline
+      const sorted = [...scores].sort((a, b) => b.score - a.score);
+      const PRIZES = [{ points: 200, coins: 100 }, { points: 100, coins: 50 }, { points: 50, coins: 25 }];
+      const results = sorted.map((ps, i) => {
+        const prize = i < PRIZES.length ? PRIZES[i] : { points: 0, coins: 10 };
+        return {
+          playerId: ps.playerId,
+          rank: i + 1,
+          points: prize.points,
+          coins: prize.coins,
+          score: ps.score,
+        };
+      });
+
+      // Broadcast reveal
+      roomService.broadcastChallengeReveal({ type: currentChallenge?.type || 'tap_frenzy', results });
+      setChallengeResults(results);
+    }
+  }, [phase, timeRemaining, players, computeIsConductor, currentChallenge, roomService]);
+
+  // ========== Conductor: auto-advance after reveal or challenge reveal ==========
+  useEffect(() => {
+    if (!computeIsConductor()) return;
+
+    // Challenge phase: wait for results then advance after 5s
+    if (phase === 'challenge' && challengeResults !== null) {
+      const timer = setTimeout(async () => {
+        const nextIndex = questionIndex + 1;
+        if (nextIndex >= totalQuestions) {
+          // Broadcast podium
+          const sorted = [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
+          const entries: PodiumEntry[] = sorted.map((p, i) => ({
             playerId: p.id,
             nickname: p.nickname,
             score: p.score || 0,
             rank: i + 1,
-            correctCount,
+            correctCount: correctCountsRef.current.get(p.id) || 0,
             totalQuestions,
-          };
-        });
+          }));
+          roomService.broadcastPodium(entries);
+          roomService.updatePresence({ gameRunning: false });
+          return;
+        }
+        const q = gameQuestionsRef.current[nextIndex];
+        if (!q) return;
+
+        // Check if there's another challenge at this slot (shouldn't happen, safety)
+        setCurrentQuestion(q);
+        setQuestionIndex(nextIndex);
+        setHasAnswered(false);
+        setSelectedAnswer(null);
+        setIsCorrect(null);
+        setCurrentResults(null);
+        setChallengeResults(null);
+        setCurrentChallenge(null);
+        setAnsweredPlayerIds([]);
+        playerAnswersRef.current = new Map();
+        answerTimestampsRef.current = new Map();
+        setPhase('question');
+
+        const endTs = Date.now() + activeSettingsRef.current.timerSeconds * 1000;
+        startCountdown(endTs);
+        roomService.broadcastQuestion(q, endTs, nextIndex, totalQuestions);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+
+    // Question reveal phase: wait 3s then advance
+    if (phase !== 'reveal') return;
+
+    const timer = setTimeout(async () => {
+      const nextIndex = questionIndex + 1;
+      if (nextIndex >= totalQuestions) {
+        const sorted = [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
+        const entries: PodiumEntry[] = sorted.map((p, i) => ({
+          playerId: p.id,
+          nickname: p.nickname,
+          score: p.score || 0,
+          rank: i + 1,
+          correctCount: correctCountsRef.current.get(p.id) || 0,
+          totalQuestions,
+        }));
         roomService.broadcastPodium(entries);
-        // Conductor updates presence: gameRunning = false
         roomService.updatePresence({ gameRunning: false });
         return;
       }
 
       const q = gameQuestionsRef.current[nextIndex];
       if (!q) return;
+
+      // Check if there's a challenge at this slot
+      const challengeSlot = challengeSlotsRef.current.find((s) => s.afterQuestionIndex === nextIndex);
+      if (challengeSlot) {
+        const { pickMatchingPairs } = await import('../types/challenges');
+        const duration = challengeSlot.type === 'tap_frenzy' ? 5 : challengeSlot.type === 'lucky_box' ? 20 : 20;
+        const endTs = Date.now() + duration * 1000;
+        const payload: import('../types/challenges').ChallengeStartPayload = {
+          type: challengeSlot.type,
+          endsAt: endTs,
+          seed: challengeSlot.seed,
+          duration,
+          items: challengeSlot.type === 'matching_pairs' ? pickMatchingPairs(challengeSlot.seed, 6) : undefined,
+        };
+        challengeResultCollectorRef.current = new Map();
+        setPhase('challenge');
+        setCurrentChallenge(payload);
+        setChallengeResults(null);
+        startCountdown(endTs);
+        roomService.broadcastChallengeStart(payload);
+        return;
+      }
 
       setCurrentQuestion(q);
       setQuestionIndex(nextIndex);
@@ -381,14 +505,13 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
       answerTimestampsRef.current = new Map();
       setPhase('question');
 
-      // Broadcast next question
       const endTs = Date.now() + activeSettingsRef.current.timerSeconds * 1000;
       startCountdown(endTs);
       roomService.broadcastQuestion(q, endTs, nextIndex, totalQuestions);
     }, 3000);
 
     return () => clearTimeout(timer);
-  }, [computeIsConductor, phase, questionIndex, totalQuestions, players, roomService, startCountdown]);
+  }, [computeIsConductor, phase, questionIndex, totalQuestions, players, roomService, startCountdown, challengeResults, currentChallenge]);
 
   // ========== Room service callbacks ==========
   useEffect(() => {
@@ -579,10 +702,40 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         }
         // Notify UI about who used Extra Time (skip self, handled locally)
         if (playerId !== options.playerId) {
-          const player = players.find((p) => p.id === playerId);
-          if (player && options.onExtraTimeUsed) {
-            options.onExtraTimeUsed(playerId, player.nickname);
+          const playerData = players.find((p) => p.id === playerId);
+          if (playerData && options.onExtraTimeUsed) {
+            options.onExtraTimeUsed(playerId, playerData.nickname);
           }
+        }
+      },
+
+      onChallengeStart(payload) {
+        // SPECTATOR GUARD: ignore challenge while spectating
+        if (isSpectatingRef.current) return;
+        clearTimer();
+        setPhase('challenge');
+        setCurrentChallenge(payload);
+        setChallengeResults(null);
+        setHasAnswered(false);
+        startCountdown(payload.endsAt);
+      },
+
+      onChallengeReveal(payload) {
+        if (isSpectatingRef.current) return;
+        clearTimer();
+        setChallengeResults(payload.results);
+        setCurrentChallenge(null);
+        // Award points to scores
+        const myResult = payload.results.find((r: import('../types/challenges').ChallengeResult) => r.playerId === options.playerId);
+        if (myResult) {
+          setCumulativeScore((prev: number) => prev + myResult.points);
+        }
+      },
+
+      onChallengeResult(playerId, score, _tiebreaker) {
+        // Conductor collects results
+        if (computeIsConductor()) {
+          challengeResultCollectorRef.current.set(playerId, score);
         }
       },
 
@@ -784,6 +937,8 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
       podiumEntries,
       myPodiumRank,
       isLateJoiner,
+      currentChallenge,
+      challengeResults,
     },
     submitAnswer,
     startGame,
