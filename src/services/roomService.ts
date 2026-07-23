@@ -31,6 +31,9 @@ export interface RoomEventCallbacks {
   onChallengeStart?: (payload: import('../types/challenges').ChallengeStartPayload) => void;
   onChallengeReveal?: (payload: import('../types/challenges').ChallengeRevealPayload) => void;
   onChallengeResult?: (playerId: string, score: number, tiebreaker?: number) => void;
+  onVoteStart?: (payload: import('../types/multiplayer').VoteStartPayload) => void;
+  onVoteCast?: (playerId: string, choice: string) => void;
+  onVoteResult?: (payload: import('../types/multiplayer').VoteResultPayload) => void;
 }
 
 // ====== Room Service ======
@@ -316,6 +319,36 @@ export class RoomService {
     });
   }
 
+  /** Conductor broadcasts vote start */
+  async broadcastVoteStart(payload: import('../types/multiplayer').VoteStartPayload) {
+    this._ensureChannel();
+    await this.channel!.send({
+      type: 'broadcast',
+      event: 'vote_start',
+      payload,
+    });
+  }
+
+  /** Player casts vote */
+  async castVote(playerId: string, choice: string) {
+    this._ensureChannel();
+    await this.channel!.send({
+      type: 'broadcast',
+      event: 'vote_cast',
+      payload: { playerId, choice },
+    });
+  }
+
+  /** Conductor broadcasts vote result */
+  async broadcastVoteResult(payload: import('../types/multiplayer').VoteResultPayload) {
+    this._ensureChannel();
+    await this.channel!.send({
+      type: 'broadcast',
+      event: 'vote_result',
+      payload,
+    });
+  }
+
   // ---- Player submits answer ----
   async submitAnswer(answer: PlayerAnswer) {
     this._ensureChannel();
@@ -405,6 +438,18 @@ export class RoomService {
 
     this.channel.on('broadcast', { event: 'challenge_result' }, ({ payload }) => {
       this.callbacks.onChallengeResult?.(payload.playerId, payload.score, payload.tiebreaker);
+    });
+
+    this.channel.on('broadcast', { event: 'vote_start' }, ({ payload }) => {
+      this.callbacks.onVoteStart?.(payload);
+    });
+
+    this.channel.on('broadcast', { event: 'vote_cast' }, ({ payload }) => {
+      this.callbacks.onVoteCast?.(payload.playerId, payload.choice);
+    });
+
+    this.channel.on('broadcast', { event: 'vote_result' }, ({ payload }) => {
+      this.callbacks.onVoteResult?.(payload);
     });
   }
 }

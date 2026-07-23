@@ -11,6 +11,8 @@ export interface RoomSettings {
   questionCount: number;
   timerSeconds: number;
   challengesEnabled: boolean;
+  /** Selected categories for Categories mode (empty = all/mixed) */
+  selectedCategories: string[];
 }
 
 export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
@@ -20,6 +22,7 @@ export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   questionCount: 10,
   timerSeconds: 15,
   challengesEnabled: true,
+  selectedCategories: [],
 };
 
 export const NORMAL_QUESTION_COUNTS = [5, 10, 15, 20];
@@ -70,6 +73,20 @@ export type MultiplayerGamePhase =
   | 'challenge'
   | 'podium'
   | 'waiting_next';
+
+export interface VoteStartPayload {
+  /** 4 randomly selected category IDs */
+  options: string[];
+  /** Display names for the options (same order) */
+  optionNames: string[];
+  endsAt: number;
+}
+
+export interface VoteResultPayload {
+  winnerId: string;
+  winnerName: string;
+  voteCounts: Record<string, number>;
+}
 
 export interface PlayerAnswer {
   playerId: string;
