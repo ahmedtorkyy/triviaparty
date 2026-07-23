@@ -20,6 +20,8 @@ interface UseMultiplayerGameOptions {
   settings: RoomSettings;
   isHost: boolean;
   roomCode: string;
+  /** Called when another player uses Extra Time */
+  onExtraTimeUsed?: (playerId: string, nickname: string) => void;
 }
 
 export type MultiplayerPhase = 'lobby' | 'countdown' | 'question' | 'reveal' | 'podium' | 'waiting';
@@ -575,6 +577,13 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         if (playerId === options.playerId) {
           setTimeRemaining((prev) => Math.round((prev + 10) * 10) / 10);
         }
+        // Notify UI about who used Extra Time (skip self, handled locally)
+        if (playerId !== options.playerId) {
+          const player = players.find((p) => p.id === playerId);
+          if (player && options.onExtraTimeUsed) {
+            options.onExtraTimeUsed(playerId, player.nickname);
+          }
+        }
       },
 
       onPodium(entries) {
@@ -722,7 +731,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         console.error('Room error:', error);
       },
     });
-  }, [roomService, options.playerId, startCountdown, clearTimer, computeIsConductor, phase, questionIndex, currentResults, players, isLateJoiner]);
+  }, [roomService, options, startCountdown, clearTimer, computeIsConductor, phase, questionIndex, currentResults, players, isLateJoiner]);
 
   // ========== Player: auto-clear reveal after display ==========
   useEffect(() => {

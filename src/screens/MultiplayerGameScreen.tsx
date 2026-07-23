@@ -50,6 +50,9 @@ export function MultiplayerGameScreen({
     },
     isHost,
     roomCode,
+    onExtraTimeUsed: (_pid, nickname) => {
+      setExtraTimeToast(`${nickname} used Extra Time (+10s)`);
+    },
   });
 
   const [showPowerUpSheet, setShowPowerUpSheet] = useState(false);
