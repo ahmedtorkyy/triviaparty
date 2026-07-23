@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { soundManager, type SoundName } from './soundManager';
 
 /**
@@ -37,14 +37,20 @@ export function useSoundOnCondition(name: SoundName, condition: boolean) {
  * Mute toggle button component.
  */
 export function MuteToggle() {
+  const [muted, setMuted] = useState(soundManager.muted);
+  const handleToggle = useCallback(() => {
+    const newMuted = soundManager.toggle();
+    setMuted(newMuted);
+  }, []);
   return (
     <button
       className="mute-toggle"
-      onClick={() => soundManager.toggle()}
-      aria-label={soundManager.muted ? 'Unmute sound' : 'Mute sound'}
-      title={soundManager.muted ? 'Unmute' : 'Mute'}
+      onClick={handleToggle}
+      aria-label={muted ? 'Unmute sound' : 'Mute sound'}
+      aria-pressed={muted}
+      title={muted ? 'Unmute' : 'Mute'}
     >
-      {soundManager.muted ? '🔇' : '🔊'}
+      {muted ? '🔇' : '🔊'}
     </button>
   );
 }

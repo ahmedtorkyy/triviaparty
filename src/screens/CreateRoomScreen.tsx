@@ -70,11 +70,14 @@ export function CreateRoomScreen({ onRoomCreated, onBack }: CreateRoomScreenProp
           >
             English
           </button>
+          {/** Arabic disabled until implemented */}
           <button
             className={`settings-option ${settings.questionLanguage === 'ar' ? 'settings-option--active' : ''}`}
-            onClick={() => setSettings({ ...settings, questionLanguage: 'ar' })}
+            onClick={() => {}}
             role="radio"
-            aria-checked={settings.questionLanguage === 'ar'}
+            aria-checked={false}
+            disabled
+            title="Coming soon"
           >
             العربية
           </button>
@@ -97,7 +100,6 @@ export function CreateRoomScreen({ onRoomCreated, onBack }: CreateRoomScreenProp
         >
           <option value="categories">Categories</option>
           <option value="voting">Voting Mode</option>
-          <option value="ai">AI Mode</option>
         </select>
       </div>
 

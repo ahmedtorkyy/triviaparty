@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { PlayerProfile } from '../types';
 import { claimDailyBonus } from '../services/storage';
+import { isSupabaseConfigured } from '../services/supabase';
 import { Button } from '../components/ui/Button';
 import { AdSlot } from '../components/ui/AdSlot';
 
@@ -26,6 +27,7 @@ export function HomeScreen({
   onShowProfile,
 }: HomeScreenProps) {
   const [dailyClaimed, setDailyClaimed] = useState(false);
+  const [supabaseOk] = useState(() => isSupabaseConfigured());
 
   useEffect(() => {
     const { profile: updated, claimed } = claimDailyBonus(profile);
@@ -88,11 +90,17 @@ export function HomeScreen({
           🎯 Play Solo
         </Button>
 
-        <Button onClick={onCreateRoom} variant="secondary" size="lg" fullWidth>
+        {!supabaseOk && (
+          <div className="home__warning" role="alert">
+            Multiplayer unavailable — server not configured
+          </div>
+        )}
+
+        <Button onClick={onCreateRoom} variant="secondary" size="lg" fullWidth disabled={!supabaseOk}>
           🏠 Create Room
         </Button>
 
-        <Button onClick={onJoinRoom} variant="secondary" size="lg" fullWidth>
+        <Button onClick={onJoinRoom} variant="secondary" size="lg" fullWidth disabled={!supabaseOk}>
           🔑 Join Room
         </Button>
 

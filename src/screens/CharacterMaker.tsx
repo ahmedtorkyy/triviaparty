@@ -98,9 +98,9 @@ export function CharacterMaker({ onComplete }: CharacterMakerProps) {
     ? character.hairStyle
     : 'custom';
   const eyeLabel = EYE_STYLES.includes(character.eyes) ? character.eyes : 'custom';
-  const accessoryLabel = ACCESSORIES.includes(character.accessory)
-    ? character.accessory
-    : 'none';
+  const accessoryLabel = character.accessory === 'none'
+    ? 'no accessory'
+    : (ACCESSORIES.includes(character.accessory) ? character.accessory : 'custom');
   const skinLabel = SKIN_NAMES[character.skinTone] || character.skinTone;
   const hairColorLabel = HAIR_COLOR_NAMES[character.hairColor] || character.hairColor;
   const bgLabel = BG_COLOR_NAMES[character.backgroundColor] || character.backgroundColor;

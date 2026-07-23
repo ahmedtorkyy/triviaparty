@@ -468,6 +468,16 @@ body {
   margin-top: var(--space-sm);
 }
 
+.home__warning {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--color-wrong);
+  background: rgba(239, 68, 68, 0.1);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-xs);
+}
+
 /* ====== GAME READY SCREEN ====== */
 .game-screen--ready {
   justify-content: center;
