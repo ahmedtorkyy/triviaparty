@@ -25,7 +25,7 @@ interface UseMultiplayerGameOptions {
   onExtraTimeUsed?: (playerId: string, nickname: string) => void;
 }
 
-export type MultiplayerPhase = 'lobby' | 'countdown' | 'question' | 'reveal' | 'podium' | 'waiting' | 'challenge';
+export type MultiplayerPhase = 'lobby' | 'countdown' | 'question' | 'reveal' | 'podium' | 'waiting' | 'challenge' | 'vote';
 
 export interface MultiplayerGameState {
   phase: MultiplayerPhase;
@@ -53,6 +53,14 @@ export interface MultiplayerGameState {
   currentChallenge: import('../types/challenges').ChallengeStartPayload | null;
   /** Challenge reveal results */
   challengeResults: import('../types/challenges').ChallengeResult[] | null;
+  /** Current vote options if phase === 'vote' */
+  currentVote: import('../types/multiplayer').VoteStartPayload | null;
+  /** My vote choice */
+  myVote: string | null;
+  /** Vote results when announced */
+  voteResult: import('../types/multiplayer').VoteResultPayload | null;
+  /** Whether I have voted */
+  hasVoted: boolean;
 }
 
 export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
@@ -63,6 +71,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   leaveRoom: () => void;
   extendDeadline: () => void;
   submitChallengeResult: (score: number, tiebreaker?: number) => void;
+  castVote: (choice: string) => void;
 } {
   const [phase, setPhase] = useState<MultiplayerPhase>('lobby');
   const [currentQuestion, setCurrentQuestion] = useState<TriviaQuestion | null>(null);
@@ -82,6 +91,10 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   const [isLateJoiner, setIsLateJoiner] = useState(false);
   const [currentChallenge, setCurrentChallenge] = useState<import('../types/challenges').ChallengeStartPayload | null>(null);
   const [challengeResults, setChallengeResults] = useState<import('../types/challenges').ChallengeResult[] | null>(null);
+  const [currentVote, setCurrentVote] = useState<import('../types/multiplayer').VoteStartPayload | null>(null);
+  const [myVote, setMyVote] = useState<string | null>(null);
+  const [voteResult, setVoteResult] = useState<import('../types/multiplayer').VoteResultPayload | null>(null);
+  const [hasVoted, setHasVoted] = useState(false);
 
   const roomService = getRoomService();
   const gameQuestionsRef = useRef<TriviaQuestion[]>([]);
@@ -113,6 +126,10 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   const challengeSlotsRef = useRef<import('../types/challenges').ChallengeSlot[]>([]);
   /** Collected challenge results (conductor side) */
   const challengeResultCollectorRef = useRef<Map<string, number>>(new Map());
+  /** Collected votes (conductor side) */
+  const voteCollectorRef = useRef<Map<string, string>>(new Map());
+  /** Track which question indices have a vote slot (voting mode) */
+  const voteSlotIndicesRef = useRef<number[]>([]);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -176,6 +193,14 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   const submitChallengeResult = useCallback((score: number, tiebreaker?: number) => {
     roomService.submitChallengeResult(options.playerId, score, tiebreaker);
   }, [roomService, options.playerId]);
+
+  // ---- Cast vote ----
+  const castVote = useCallback((choice: string) => {
+    if (hasVoted || phase !== 'vote') return;
+    setMyVote(choice);
+    setHasVoted(true);
+    roomService.castVote(options.playerId, choice);
+  }, [hasVoted, phase, options.playerId, roomService]);
 
   // ---- Request rematch ----
   const requestRematch = useCallback(() => {
@@ -257,6 +282,21 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         }));
       } else {
         challengeSlotsRef.current = [];
+      }
+
+      // Generate vote slots for voting mode
+      voteSlotIndicesRef.current = [];
+      if (options.settings.questionSource === 'voting') {
+        // Vote before question 1 and after every 3rd question
+        for (let i = 0; i <= options.settings.questionCount; i += 3) {
+          if (i < options.settings.questionCount) {
+            voteSlotIndicesRef.current.push(i);
+          }
+        }
+        // Remove any slot that's also a challenge slot (vote takes priority)
+        voteSlotIndicesRef.current = voteSlotIndicesRef.current.filter(
+          (slot) => !challengeSlotsRef.current.some((cs) => cs.afterQuestionIndex === slot)
+        );
       }
     } catch (err) {
       console.error('Failed to start game:', err);
@@ -421,12 +461,57 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
     }
   }, [phase, timeRemaining, players, computeIsConductor, currentChallenge, roomService]);
 
-  // ========== Conductor: auto-advance after reveal or challenge reveal ==========
+  // ========== Conductor: advance vote when time expires or all voted ==========
+  useEffect(() => {
+    if (!computeIsConductor() || phase !== 'vote') return;
+
+    const allPresent = players.filter((p) => !p.isEliminated);
+    const allVoted = allPresent.length > 0 && allPresent.every((p) => voteCollectorRef.current.has(p.id));
+    const timerExpired = timeRemaining <= 0;
+
+    if ((timerExpired || allVoted) && !revealSentRef.current && currentVote) {
+      revealSentRef.current = true;
+
+      // Tally votes
+      const voteCounts: Record<string, number> = {};
+      currentVote.options.forEach((opt) => { voteCounts[opt] = 0; });
+      for (const [_pid, choice] of voteCollectorRef.current) {
+        voteCounts[choice] = (voteCounts[choice] || 0) + 1;
+      }
+
+      // Find winner (ties broken randomly)
+      let maxVotes = 0;
+      let winners: string[] = [];
+      for (const [opt, count] of Object.entries(voteCounts)) {
+        if (count > maxVotes) {
+          maxVotes = count;
+          winners = [opt];
+        } else if (count === maxVotes) {
+          winners.push(opt);
+        }
+      }
+      const winnerId = winners[Math.floor(Math.random() * winners.length)];
+      const winnerIdx = currentVote.options.indexOf(winnerId);
+      const winnerName = currentVote.optionNames[winnerIdx] || winnerId;
+
+      const result: import('../types/multiplayer').VoteResultPayload = { winnerId, winnerName, voteCounts };
+      setVoteResult(result);
+      setCurrentVote(null);
+      roomService.broadcastVoteResult(result);
+    }
+  }, [phase, timeRemaining, players, computeIsConductor, currentVote, roomService]);
+
+  // ========== Conductor: auto-advance after reveal or challenge reveal or vote result ==========
   useEffect(() => {
     if (!computeIsConductor()) return;
 
     // Challenge phase: wait for results then advance after 5s
     if (phase === 'challenge' && challengeResults !== null) {
+      // already handled below, fall through
+    }
+
+    // Vote phase: after result, advance after 3s
+    if (phase === 'vote' && voteResult !== null) {
       const timer = setTimeout(async () => {
         const nextIndex = questionIndex + 1;
         if (nextIndex >= totalQuestions) {
@@ -490,6 +575,39 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
 
       const q = gameQuestionsRef.current[nextIndex];
       if (!q) return;
+
+      // Check for vote slot (voting mode) — vote takes priority over challenge
+      if (voteSlotIndicesRef.current.includes(nextIndex)) {
+        const CATEGORIES = [
+          { id: 'food_and_drink', name: '🍔 Food & Drink' },
+          { id: 'arts_and_literature', name: '🎨 Arts & Literature' },
+          { id: 'film_and_tv', name: '🎬 Film & TV' },
+          { id: 'history', name: '📜 History' },
+          { id: 'music', name: '🎵 Music' },
+          { id: 'science', name: '🔬 Science' },
+          { id: 'society_and_culture', name: '🌍 Society & Culture' },
+          { id: 'sport_and_leisure', name: '⚽ Sport & Leisure' },
+          { id: 'geography', name: '🌎 Geography' },
+          { id: 'general_knowledge', name: '🧠 General Knowledge' },
+        ];
+        const shuffled = [...CATEGORIES].sort(() => Math.random() - 0.5);
+        const picked = shuffled.slice(0, 4);
+        const endTs = Date.now() + 10 * 1000;
+        const payload: import('../types/multiplayer').VoteStartPayload = {
+          options: picked.map(c => c.id),
+          optionNames: picked.map(c => c.name),
+          endsAt: endTs,
+        };
+        voteCollectorRef.current = new Map();
+        setPhase('vote');
+        setCurrentVote(payload);
+        setMyVote(null);
+        setHasVoted(false);
+        setVoteResult(null);
+        startCountdown(endTs);
+        roomService.broadcastVoteStart(payload);
+        return;
+      }
 
       // Check if there's a challenge at this slot
       const challengeSlot = challengeSlotsRef.current.find((s) => s.afterQuestionIndex === nextIndex);
@@ -617,8 +735,40 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         cumulativeScoresRef.current = new Map();
         extendedDeadlinesRef.current = new Map();
 
-        // Go to first question after countdown
+        // Go to first question after countdown, or vote first if voting mode
         setTimeout(() => {
+          if (voteSlotIndicesRef.current.includes(0)) {
+            // First, show a vote screen before the first question
+            const CATEGORIES = [
+              { id: 'food_and_drink', name: '🍔 Food & Drink' },
+              { id: 'arts_and_literature', name: '🎨 Arts & Literature' },
+              { id: 'film_and_tv', name: '🎬 Film & TV' },
+              { id: 'history', name: '📜 History' },
+              { id: 'music', name: '🎵 Music' },
+              { id: 'science', name: '🔬 Science' },
+              { id: 'society_and_culture', name: '🌍 Society & Culture' },
+              { id: 'sport_and_leisure', name: '⚽ Sport & Leisure' },
+              { id: 'geography', name: '🌎 Geography' },
+              { id: 'general_knowledge', name: '🧠 General Knowledge' },
+            ];
+            const shuffled = [...CATEGORIES].sort(() => Math.random() - 0.5);
+            const picked = shuffled.slice(0, 4);
+            const endTs = Date.now() + 10 * 1000;
+            const votePayload: import('../types/multiplayer').VoteStartPayload = {
+              options: picked.map(c => c.id),
+              optionNames: picked.map(c => c.name),
+              endsAt: endTs,
+            };
+            voteCollectorRef.current = new Map();
+            setPhase('vote');
+            setCurrentVote(votePayload);
+            setMyVote(null);
+            setHasVoted(false);
+            setVoteResult(null);
+            startCountdown(endTs);
+            roomService.broadcastVoteStart(votePayload);
+            return;
+          }
           if (gameQuestionsRef.current.length > 0) {
             const q = gameQuestionsRef.current[0];
             setCurrentQuestion(q);
@@ -756,6 +906,31 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
         if (computeIsConductor()) {
           challengeResultCollectorRef.current.set(playerId, score);
         }
+      },
+
+      onVoteStart(payload) {
+        if (isSpectatingRef.current) return;
+        clearTimer();
+        setPhase('vote');
+        setCurrentVote(payload);
+        setMyVote(null);
+        setHasVoted(false);
+        setVoteResult(null);
+        startCountdown(payload.endsAt);
+      },
+
+      onVoteCast(playerId, choice) {
+        // Conductor collects vote
+        if (computeIsConductor()) {
+          voteCollectorRef.current.set(playerId, choice);
+        }
+      },
+
+      onVoteResult(payload) {
+        if (isSpectatingRef.current) return;
+        clearTimer();
+        setVoteResult(payload);
+        setCurrentVote(null);
       },
 
       onPodium(entries) {
@@ -958,6 +1133,10 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
       isLateJoiner,
       currentChallenge,
       challengeResults,
+      currentVote,
+      myVote,
+      voteResult,
+      hasVoted,
     },
     submitAnswer,
     startGame,
@@ -965,5 +1144,6 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
     leaveRoom,
     extendDeadline,
     submitChallengeResult,
+    castVote,
   };
 }
