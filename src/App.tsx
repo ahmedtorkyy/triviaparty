@@ -13,6 +13,7 @@ import { MultiplayerGameScreen } from './screens/MultiplayerGameScreen';
 
 import { ShopScreen } from './screens/ShopScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
+import { MuteToggle } from './services/useSound';
 
 type AppScreen =
   | 'loading'
@@ -222,6 +223,8 @@ function App() {
 
   return (
     <div className="app">
+      <MuteToggle />
+
       {screen === 'character' && (
         <CharacterMaker onComplete={handleCharacterComplete} />
       )}

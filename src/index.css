@@ -1667,6 +1667,34 @@ body {
   background: var(--color-text-secondary);
 }
 
+/* ====== MUTE TOGGLE ====== */
+.mute-toggle {
+  position: fixed;
+  top: var(--space-md);
+  right: var(--space-md);
+  z-index: 200;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-bg-elevated);
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.mute-toggle:hover {
+  border-color: var(--color-accent);
+}
+
+.mute-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
 /* ====== POWER-UP BUTTON ====== */
 .game-screen__powerup-bar {
   display: flex;
