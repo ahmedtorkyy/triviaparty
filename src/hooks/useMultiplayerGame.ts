@@ -250,10 +250,16 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
     setTotalQuestions(count);
 
     try {
-      const qs = await fetchQuestions(
-        count,
-        options.settings.questionSource === 'categories' ? undefined : undefined
-      );
+      let categoryParam: string | undefined;
+      if (options.settings.questionSource === 'categories' && options.settings.selectedCategories.length > 0) {
+        categoryParam = options.settings.selectedCategories.join(',');
+      } else if (options.settings.questionSource === 'voting') {
+        // Voting mode: mixed first batch, voting picks later
+        categoryParam = undefined;
+      } else {
+        categoryParam = undefined;
+      }
+      const qs = await fetchQuestions(count, categoryParam);
       gameQuestionsRef.current = qs;
 
       const startAt = Date.now() + 3000;
@@ -528,6 +534,15 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
           roomService.broadcastPodium(entries);
           roomService.updatePresence({ gameRunning: false });
           return;
+        }
+        // Fetch next 3 questions from winning category
+        if (voteResult.winnerId && options.settings.questionSource === 'voting') {
+          try {
+            const moreQs = await fetchQuestions(3, voteResult.winnerId);
+            gameQuestionsRef.current = [...gameQuestionsRef.current, ...moreQs];
+          } catch (e) {
+            console.warn('Failed to fetch category questions, continuing with existing', e);
+          }
         }
         const q = gameQuestionsRef.current[nextIndex];
         if (!q) return;

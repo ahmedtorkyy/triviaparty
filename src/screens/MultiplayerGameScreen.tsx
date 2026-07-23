@@ -9,6 +9,7 @@ import { PowerUpSheet } from '../components/game/PowerUpSheet';
 import { TapFrenzyChallenge } from '../components/game/TapFrenzyChallenge';
 import { LuckyBoxChallenge } from '../components/game/LuckyBoxChallenge';
 import { MatchingPairsChallenge } from '../components/game/MatchingPairsChallenge';
+import { VoteScreen } from '../components/game/VoteScreen';
 import { TimerRing } from '../components/ui/TimerRing';
 import { Button } from '../components/ui/Button';
 import { PodiumScreen } from './PodiumScreen';
@@ -39,7 +40,7 @@ export function MultiplayerGameScreen({
   onProfileChange,
   profile,
 }: MultiplayerGameScreenProps) {
-  const { state, submitAnswer, startGame, requestRematch, leaveRoom, extendDeadline, submitChallengeResult } = useMultiplayerGame({
+  const { state, submitAnswer, startGame, requestRematch, leaveRoom, extendDeadline, submitChallengeResult, castVote } = useMultiplayerGame({
     playerId,
     playerNickname,
     playerCharacter,
@@ -243,6 +244,31 @@ export function MultiplayerGameScreen({
             )}
           </>
         )}
+      </div>
+    );
+  }
+
+  // ---- Vote phase ----
+  if (state.phase === 'vote') {
+    return (
+      <div className="screen mp-game mp-game--vote" role="main">
+        {state.currentVote ? (
+          <VoteScreen
+            options={state.currentVote.options}
+            optionNames={state.currentVote.optionNames}
+            endsAt={state.currentVote.endsAt}
+            onVote={castVote}
+            hasVoted={state.hasVoted}
+            myChoice={state.myVote}
+            winnerId={state.voteResult?.winnerId || null}
+            winnerName={state.voteResult?.winnerName || null}
+          />
+        ) : state.voteResult ? (
+          <div className="vote-screen__result" role="alert">
+            <h2>Vote Complete!</h2>
+            <p>Winner: {state.voteResult.winnerName}</p>
+          </div>
+        ) : null}
       </div>
     );
   }
