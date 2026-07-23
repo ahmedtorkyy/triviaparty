@@ -38,8 +38,17 @@ function App() {
   const [playerCharacterSnapshot, setPlayerCharacterSnapshot] = useState<PlayerCharacterSnapshot | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [isConductor, setIsConductor] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   const roomService = getRoomService();
+
+  // Mobile audio unlock: prime audio context on first user gesture
+  const unlockAudio = () => {
+    if (audioUnlocked) return;
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    ctx.resume();
+    setAudioUnlocked(true);
+  };
 
   // Load profile on mount
   useEffect(() => {
@@ -222,7 +231,7 @@ function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app" onClick={unlockAudio} onTouchStart={unlockAudio}>
       <MuteToggle />
 
       {screen === 'character' && (

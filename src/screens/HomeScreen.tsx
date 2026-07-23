@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { PlayerProfile } from '../types';
 import { claimDailyBonus } from '../services/storage';
 import { Button } from '../components/ui/Button';
+import { AdSlot } from '../components/ui/AdSlot';
 
 interface HomeScreenProps {
   profile: PlayerProfile;
@@ -103,6 +104,9 @@ export function HomeScreen({
           👤 Profile
         </Button>
       </div>
+
+      {/* Ad Slot (reserved, hidden when adsEnabled=false) */}
+      <AdSlot id="home" size="banner" />
     </div>
   );
 }

@@ -1,5 +1,9 @@
+import { useEffect } from 'react';
 import type { PodiumEntry, RoomPlayer } from '../types/multiplayer';
 import { Button } from '../components/ui/Button';
+import { ShareCard } from '../components/ui/ShareCard';
+import { AdSlot } from '../components/ui/AdSlot';
+import { playSound } from '../services/useSound';
 
 interface PodiumScreenProps {
   entries: PodiumEntry[];
@@ -16,6 +20,20 @@ export function PodiumScreen({ entries, players, onRematch, onLeave, playerId, m
   const topThree = sorted.filter((e) => e.rank <= 3);
   const rest = sorted.filter((e) => e.rank > 3);
   const myEntry = entries.find((e) => e.playerId === playerId);
+
+  // Play sounds on mount
+  useEffect(() => {
+    if (myEntry && myEntry.correctCount > 0) {
+      playSound('coin');
+    }
+    if (myRank === 1) {
+      playSound('victory');
+    }
+  }, []);
+
+  const bestMoment = myEntry
+    ? `${myEntry.correctCount}/${totalQuestions} correct`
+    : '0/0 correct';
 
   return (
     <div className="screen podium" role="main">
@@ -66,8 +84,8 @@ export function PodiumScreen({ entries, players, onRematch, onLeave, playerId, m
                 #{entry.rank}
               </span>
               <span className="podium__correct" aria-label={`${entry.correctCount} correct out of ${totalQuestions}`}>
-                              {entry.correctCount}/{totalQuestions} correct
-                            </span>
+                {entry.correctCount}/{totalQuestions} correct
+              </span>
             </div>
           );
         })}
@@ -96,6 +114,22 @@ export function PodiumScreen({ entries, players, onRematch, onLeave, playerId, m
           <p>You placed #{myEntry.rank} with {myEntry.score} points. {myEntry.correctCount} out of {totalQuestions} correct answers. +{myEntry.correctCount * 100} coins earned!</p>
         </div>
       )}
+
+      {/* Share Card */}
+      {myEntry && (
+        <ShareCard
+          playerId={playerId}
+          nickname={players.find((p) => p.id === playerId)?.nickname || ''}
+          rank={myEntry.rank}
+          totalPlayers={entries.length}
+          score={myEntry.score}
+          bestMoment={bestMoment}
+          coinEarned={myEntry.correctCount * 100}
+        />
+      )}
+
+      {/* Ad Slot (reserved, hidden when adsEnabled=false) */}
+      <AdSlot id="podium" size="rectangle" />
 
       {/* Actions */}
       <div className="podium__actions">

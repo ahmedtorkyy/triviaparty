@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSoloGame } from '../hooks/useSoloGame';
 import type { PlayerProfile, PowerUpType } from '../types';
 import { updateStats } from '../services/storage';
+import { playSound } from '../services/useSound';
 import { CATEGORIES, CATEGORY_ANY } from '../services/triviaApi';
 import { TimerRing } from '../components/ui/TimerRing';
 import { QuestionCard } from '../components/game/QuestionCard';
@@ -48,8 +49,10 @@ export function GameScreen({ profile, onProfileChange, onBack }: GameScreenProps
       setShowReveal(true);
       if (game.isCorrect) {
         setAnnouncement('Correct!');
+        playSound('correct');
       } else if (game.currentQuestion) {
         setAnnouncement(`Wrong. The correct answer is: ${game.currentQuestion.correctAnswer}`);
+        playSound('wrong');
       }
     }
 
