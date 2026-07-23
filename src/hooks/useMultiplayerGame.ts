@@ -61,6 +61,7 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   requestRematch: () => void;
   leaveRoom: () => void;
   extendDeadline: () => void;
+  submitChallengeResult: (score: number, tiebreaker?: number) => void;
 } {
   const [phase, setPhase] = useState<MultiplayerPhase>('lobby');
   const [currentQuestion, setCurrentQuestion] = useState<TriviaQuestion | null>(null);
@@ -157,6 +158,11 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
     setIsCorrect(answer === currentQuestion?.correctAnswer);
     roomService.submitAnswer({ playerId: options.playerId, answer, timeMs: elapsed });
   }, [hasAnswered, phase, timeRemaining, currentQuestion, options.playerId, roomService, isLateJoiner]);
+
+  // ---- Submit challenge result ----
+  const submitChallengeResult = useCallback((score: number, tiebreaker?: number) => {
+    roomService.submitChallengeResult(options.playerId, score, tiebreaker);
+  }, [roomService, options.playerId]);
 
   // ---- Request rematch ----
   const requestRematch = useCallback(() => {
@@ -945,5 +951,6 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
     requestRematch,
     leaveRoom,
     extendDeadline,
+    submitChallengeResult,
   };
 }

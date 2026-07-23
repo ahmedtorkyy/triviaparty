@@ -6,6 +6,9 @@ import { QuestionCard } from '../components/game/QuestionCard';
 import { GameHud } from '../components/game/GameHud';
 import { RevealScreen } from '../components/game/RevealScreen';
 import { PowerUpSheet } from '../components/game/PowerUpSheet';
+import { TapFrenzyChallenge } from '../components/game/TapFrenzyChallenge';
+import { LuckyBoxChallenge } from '../components/game/LuckyBoxChallenge';
+import { MatchingPairsChallenge } from '../components/game/MatchingPairsChallenge';
 import { TimerRing } from '../components/ui/TimerRing';
 import { Button } from '../components/ui/Button';
 import { PodiumScreen } from './PodiumScreen';
@@ -36,7 +39,7 @@ export function MultiplayerGameScreen({
   onProfileChange,
   profile,
 }: MultiplayerGameScreenProps) {
-  const { state, submitAnswer, startGame, requestRematch, leaveRoom, extendDeadline } = useMultiplayerGame({
+  const { state, submitAnswer, startGame, requestRematch, leaveRoom, extendDeadline, submitChallengeResult } = useMultiplayerGame({
     playerId,
     playerNickname,
     playerCharacter,
@@ -192,6 +195,57 @@ export function MultiplayerGameScreen({
     );
   }
 
+  // ---- Challenge phase ----
+  if (state.phase === 'challenge' && state.currentChallenge) {
+    const challenge = state.currentChallenge;
+    const isDisabled = state.hasAnswered || state.challengeResults !== null;
+
+    return (
+      <div className="screen mp-game mp-game--challenge" role="main">
+        <div className="sr-only" aria-live="assertive" role="status">
+          {challenge.type === 'tap_frenzy' && 'Challenge: Tap Frenzy! Tap the button as fast as you can.'}
+          {challenge.type === 'lucky_box' && 'Challenge: Lucky Box! Open boxes to earn coins, but avoid the corrupted box!'}
+          {challenge.type === 'matching_pairs' && 'Challenge: Matching Pairs! Find matching pairs before time runs out.'}
+          {state.challengeResults && (
+            `Challenge over! ${state.challengeResults.find(r => r.playerId === playerId)?.rank ? `You placed #${state.challengeResults.find(r => r.playerId === playerId)?.rank} and earned ${state.challengeResults.find(r => r.playerId === playerId)?.points} points and ${state.challengeResults.find(r => r.playerId === playerId)?.coins} coins.` : 'Results coming...'}`
+          )}
+        </div>
+
+        {/* Challenge reveal results */}
+        {state.challengeResults ? (
+          <ChallengeRevealView results={state.challengeResults} playerId={playerId} />
+        ) : (
+          <>
+            {/* Active challenge component */}
+            {challenge.type === 'tap_frenzy' && (
+              <TapFrenzyChallenge
+                endsAt={challenge.endsAt}
+                onSubmit={(tapCount) => submitChallengeResult(tapCount)}
+                disabled={isDisabled}
+              />
+            )}
+            {challenge.type === 'lucky_box' && (
+              <LuckyBoxChallenge
+                endsAt={challenge.endsAt}
+                seed={challenge.seed}
+                onSubmit={(boxes, coins) => submitChallengeResult(boxes, coins)}
+                disabled={isDisabled}
+              />
+            )}
+            {challenge.type === 'matching_pairs' && challenge.items && (
+              <MatchingPairsChallenge
+                endsAt={challenge.endsAt}
+                items={challenge.items}
+                onSubmit={(matched) => submitChallengeResult(matched)}
+                disabled={isDisabled}
+              />
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+
   // ---- Active Game ----
   const timerSeconds = settings?.timerSeconds || 15;
 
@@ -303,4 +357,36 @@ function answeredIndicator(answeredIds: string[], allPlayers: RoomPlayer[]): str
   const total = allPlayers.filter((p) => !p.isEliminated).length;
   const answered = answeredIds.length;
   return `${answered} of ${total} answered`;
+}
+
+/** Challenge reveal ranking display */
+function ChallengeRevealView({ results, playerId }: { results: import('../types/challenges').ChallengeResult[]; playerId: string }) {
+  const sorted = [...results].sort((a, b) => a.rank - b.rank);
+  const topThree = sorted.slice(0, 3);
+  const myResult = results.find((r) => r.playerId === playerId);
+  const medals = ['🥇', '🥈', '🥉'];
+
+  return (
+    <div className="challenge-reveal" role="region" aria-label="Challenge results">
+      <h2 className="challenge-reveal__title">Challenge Results</h2>
+      <div className="challenge-reveal__places" role="list" aria-label="Rankings">
+        {topThree.map((result) => (
+          <div key={result.playerId} className={`challenge-reveal__entry ${result.playerId === playerId ? 'challenge-reveal__entry--me' : ''}`} role="listitem">
+            <span className="challenge-reveal__medal" aria-hidden="true">{medals[result.rank - 1]}</span>
+            <span className="challenge-reveal__rank">#{result.rank}</span>
+            <span className="challenge-reveal__score">{result.score}</span>
+            <span className="challenge-reveal__prize">+{result.points}pts 🪙{result.coins}</span>
+          </div>
+        ))}
+      </div>
+      {myResult && myResult.rank > 3 && (
+        <div className="challenge-reveal__my-rank">
+          <p>You placed #{myResult.rank}. +{myResult.points}pts 🪙{myResult.coins}</p>
+        </div>
+      )}
+      <div className="sr-only" role="status" aria-live="assertive">
+        {myResult ? `Challenge complete! You placed ${myResult.rank} of ${results.length}. ${myResult.points > 0 ? `Earned ${myResult.points} points and ${myResult.coins} coins.` : 'No points earned.'}` : ''}
+      </div>
+    </div>
+  );
 }

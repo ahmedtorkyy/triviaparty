@@ -56,8 +56,8 @@ export function getChallengeCount(questionCount: number): number {
 
 /** Determine which question indices get a challenge after them */
 export function getChallengeSlots(questionCount: number, seed: number): number[] {
-  const count = getChallengeCount(questionCount);
-  if (count === 0) return [];
+  const targetCount = getChallengeCount(questionCount);
+  if (targetCount === 0) return [];
 
   // Available slots: skip first and last question
   const available: number[] = [];
@@ -74,18 +74,26 @@ export function getChallengeSlots(questionCount: number, seed: number): number[]
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
 
-  // Take first `count` slots, sorted so challenges are spread
-  const selected = shuffled.slice(0, count).sort((a, b) => a - b);
-
-  // Ensure no back-to-back slots
+  // Take candidates without back-to-back, then fill remaining if needed
   const result: number[] = [];
-  for (const slot of selected) {
+  for (const slot of shuffled) {
+    if (result.length >= targetCount) break;
     if (result.length === 0 || slot > result[result.length - 1] + 1) {
       result.push(slot);
     }
   }
 
-  return result;
+  // If we still have fewer than target, fill from remaining non-adjacent slots
+  if (result.length < targetCount) {
+    for (const slot of shuffled) {
+      if (result.length >= targetCount) break;
+      if (!result.includes(slot) && (result.length === 0 || slot > result[result.length - 1] + 1)) {
+        result.push(slot);
+      }
+    }
+  }
+
+  return result.sort((a, b) => a - b);
 }
 
 /** Pick random challenge types for each slot */
