@@ -6,6 +6,7 @@ import {
   VOTING_QUESTION_COUNTS,
   TIMER_OPTIONS,
 } from '../types/multiplayer';
+import { CATEGORIES } from '../services/triviaApi';
 import { generateRoomCode } from '../services/roomUtils';
 import { Button } from '../components/ui/Button';
 
@@ -15,7 +16,10 @@ interface CreateRoomScreenProps {
 }
 
 export function CreateRoomScreen({ onRoomCreated, onBack }: CreateRoomScreenProps) {
-  const [settings, setSettings] = useState<RoomSettings>({ ...DEFAULT_ROOM_SETTINGS });
+  const [settings, setSettings] = useState<RoomSettings>({
+    ...DEFAULT_ROOM_SETTINGS,
+    selectedCategories: CATEGORIES.map(c => c.id),
+  });
 
   const handleCreate = () => {
     const code = generateRoomCode();
@@ -96,6 +100,40 @@ export function CreateRoomScreen({ onRoomCreated, onBack }: CreateRoomScreenProp
           <option value="ai">AI Mode</option>
         </select>
       </div>
+
+      {/* Category multi-select (Categories mode only) */}
+      {settings.questionSource === 'categories' && (
+        <div className="settings-group" role="group" aria-label="Choose categories">
+          <label className="settings-label">Categories</label>
+          <div className="category-checkboxes">
+            {CATEGORIES.map((cat) => {
+              const isChecked = settings.selectedCategories.includes(cat.id);
+              const isLast = settings.selectedCategories.length === 1 && isChecked;
+              return (
+                <label key={cat.id} className="category-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => {
+                      if (isChecked && isLast) return; // prevent unchecking last
+                      const updated = isChecked
+                        ? settings.selectedCategories.filter((id) => id !== cat.id)
+                        : [...settings.selectedCategories, cat.id];
+                      setSettings({ ...settings, selectedCategories: updated });
+                    }}
+                    disabled={isChecked && isLast}
+                    aria-label={`${cat.name}${isChecked && isLast ? ' (at least one required)' : ''}`}
+                  />
+                  <span>{cat.name}</span>
+                </label>
+              );
+            })}
+          </div>
+          {settings.selectedCategories.length === 0 && (
+            <p className="settings-hint" role="alert">Select at least one category</p>
+          )}
+        </div>
+      )}
 
       {/* Question count (normal mode only) */}
       {settings.mode === 'normal' && (
