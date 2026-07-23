@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { TimerRing } from '../ui/TimerRing';
+import { playSound } from '../../services/useSound';
 
 interface TapFrenzyChallengeProps {
   endsAt: number;
@@ -27,6 +28,8 @@ export function TapFrenzyChallenge({ endsAt, onSubmit, disabled }: TapFrenzyChal
     tick();
     const interval = setInterval(tick, 100);
     setStarted(true);
+    // Play challenge start sound
+    playSound('challenge');
     return () => clearInterval(interval);
   }, [endsAt, onSubmit]);
 
@@ -37,6 +40,7 @@ export function TapFrenzyChallenge({ endsAt, onSubmit, disabled }: TapFrenzyChal
     const newCount = tapCount + 1;
     setTapCount(newCount);
     tapCountRef.current = newCount;
+    playSound('tap');
   }, [tapCount, disabled]);
 
   const duration = Math.round((endsAt - Date.now() - timeRemaining * 1000) / 1000) + Math.round(timeRemaining);

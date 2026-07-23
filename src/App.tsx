@@ -14,6 +14,7 @@ import { MultiplayerGameScreen } from './screens/MultiplayerGameScreen';
 import { ShopScreen } from './screens/ShopScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { MuteToggle } from './services/useSound';
+import { soundManager } from './services/soundManager';
 
 type AppScreen =
   | 'loading'
@@ -42,11 +43,10 @@ function App() {
 
   const roomService = getRoomService();
 
-  // Mobile audio unlock: prime audio context on first user gesture
+  // Mobile audio unlock: prime HTMLAudio elements on first gesture
   const unlockAudio = () => {
     if (audioUnlocked) return;
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    ctx.resume();
+    soundManager.prime();
     setAudioUnlocked(true);
   };
 

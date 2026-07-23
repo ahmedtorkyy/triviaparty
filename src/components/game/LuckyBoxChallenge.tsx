@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { TimerRing } from '../ui/TimerRing';
+import { playSound } from '../../services/useSound';
 
 interface LuckyBoxChallengeProps {
   endsAt: number;
@@ -66,6 +67,7 @@ export function LuckyBoxChallenge({ endsAt, seed, onSubmit, disabled }: LuckyBox
     if (chance < corruptChance) {
       // Corrupted!
       setPhase('corrupted');
+      playSound('corrupted');
       setTimeout(() => {
         submittedRef.current = true;
         onSubmit(boxesOpenedRef.current, 0);
@@ -76,6 +78,7 @@ export function LuckyBoxChallenge({ endsAt, seed, onSubmit, disabled }: LuckyBox
       setBoxesOpened((prev) => prev + 1);
       setCoinsBanked((prev) => prev + 30);
       setPhase('safe');
+      playSound('box_open');
       setTimeout(() => setPhase('choosing'), 800);
     }
   }, [disabled, phase, boxesOpened, nextRandom, onSubmit]);

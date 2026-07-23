@@ -1,4 +1,5 @@
 import type { TriviaQuestion } from '../../types';
+import { playSound } from '../../services/useSound';
 
 interface QuestionCardProps {
   question: TriviaQuestion;
@@ -58,7 +59,7 @@ export function QuestionCard({
             <button
               key={index}
               className={className}
-              onClick={() => onAnswer(answer)}
+              onClick={() => { playSound('tap'); onAnswer(answer); }}
               disabled={disabled}
               style={{ borderColor: color }}
               aria-label={`Answer option ${index + 1}: ${answer}`}

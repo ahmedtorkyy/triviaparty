@@ -125,6 +125,7 @@ export function PodiumScreen({ entries, players, onRematch, onLeave, playerId, m
           score={myEntry.score}
           bestMoment={bestMoment}
           coinEarned={myEntry.correctCount * 100}
+          character={players.find((p) => p.id === playerId)?.character}
         />
       )}
 

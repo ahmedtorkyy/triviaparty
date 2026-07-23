@@ -49,6 +49,19 @@ class SoundManager {
     clone.volume = name === 'tick' || name === 'countdown' ? 0.3 : 0.5;
     clone.play().catch(() => {}); // Ignore autoplay-blocked errors
   }
+
+  /** Prime HTMLAudio on iOS: play/pause each sound muted to unlock audio */
+  prime() {
+    for (const [_name, audio] of this.sounds) {
+      audio.volume = 0;
+      audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(() => {});
+    }
+    // Also try creating a silent AudioContext to be safe
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      ctx.resume();
+    } catch {}
+  }
 }
 
 export const soundManager = new SoundManager();
