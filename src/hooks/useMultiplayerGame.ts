@@ -668,6 +668,26 @@ export function useMultiplayerGame(options: UseMultiplayerGameOptions): {
   // ========== Room service callbacks ==========
   useEffect(() => {
     roomService.setCallbacks({
+      /** onPlayersSync is the PRIMARY source of truth for the player list */
+      onPlayersSync(players) {
+        setPlayers(players);
+        // Detect settings from host's presence for late joiners
+        const hostPresence = players.find((p) => p.isHost);
+        if (hostPresence?.settings) {
+          activeSettingsRef.current = hostPresence.settings;
+        }
+        // Detect if game is running for late joiners
+        const anyRunning = players.some((p) => p.gameRunning);
+        if ((phase === 'lobby' || phase === 'waiting') && anyRunning && !gameStartedRef.current) {
+          setIsLateJoiner(true);
+          isSpectatingRef.current = true;
+          if (!snapshotRequestedRef.current) {
+            snapshotRequestedRef.current = true;
+            roomService.requestStateSnapshot();
+          }
+        }
+      },
+
       onPlayerJoin(player) {
         // Check presence for game_running flag
         const isGameRunning = player.gameRunning === true;

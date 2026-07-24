@@ -17,6 +17,8 @@ import type { TriviaQuestion } from '../types';
 export interface RoomEventCallbacks {
   onPlayerJoin?: (player: RoomPlayer) => void;
   onPlayerLeave?: (playerId: string) => void;
+  /** Called on every presence sync with the FULL updated players array */
+  onPlayersSync?: (players: RoomPlayer[]) => void;
   onHostChange?: (newHostId: string) => void;
   onPlayerAnswer?: (playerId: string, answer: string | null, timeMs: number) => void;
   onGameStart?: (payload: GameStartPayload) => void;
@@ -80,7 +82,8 @@ export class RoomService {
           lives: 3,
           isEliminated: false,
           hasAnswered: false,
-          game_running: false,
+          gameRunning: false,
+          settings: _settings,
         });
       }
     });
@@ -147,7 +150,7 @@ export class RoomService {
             lives: 3,
             isEliminated: false,
             hasAnswered: false,
-            game_running: false,
+            gameRunning: false,
           });
 
           // Wait briefly for presence sync to show a host
@@ -198,9 +201,9 @@ export class RoomService {
   /** Broadcast game_start with full payload: settings, questions, startAt */
   async startGame(payload: GameStartPayload) {
     this._ensureChannel();
-    // Conductor updates their presence: game_running = true, carry settings
+    // Conductor updates their presence: gameRunning = true, carry settings
     await this.channel!.track({
-      game_running: true,
+      gameRunning: true,
       settings: payload.settings,
     });
     await this.channel!.send({
@@ -235,9 +238,9 @@ export class RoomService {
 
   async broadcastPodium(entries: PodiumEntry[]) {
     this._ensureChannel();
-    // Game ends - conductor clears game_running
+    // Game ends - conductor clears gameRunning
     await this.channel!.track({
-      game_running: false,
+      gameRunning: false,
     });
     await this.channel!.send({
       type: 'broadcast',
@@ -248,9 +251,9 @@ export class RoomService {
 
   async broadcastRematch(playerId: string) {
     this._ensureChannel();
-    // Game resets - conductor clears game_running
+    // Game resets - conductor clears gameRunning
     await this.channel!.track({
-      game_running: false,
+      gameRunning: false,
     });
     await this.channel!.send({
       type: 'broadcast',
@@ -373,11 +376,42 @@ export class RoomService {
   private _setupChannel(_player: RoomPlayer, _isHost: boolean) {
     if (!this.channel) return;
 
-    // Presence sync handler
+    // Presence sync handler — rebuild the FULL players array on every sync
     this.channel.on('presence', { event: 'sync' }, () => {
       this._connected = true;
-      // We do NOT promote players to host here — that's handled by the hook
-      // Presence sync is just for establishing connection
+      const state = this.channel!.presenceState();
+      const players: RoomPlayer[] = [];
+      for (const [id, presences] of Object.entries(state)) {
+        const p = (presences as any[])[0];
+        if (p && p.nickname) {
+          players.push({
+            id,
+            nickname: p.nickname,
+            character: p.character,
+            isHost: p.isHost === true,
+            score: p.score || 0,
+            lives: p.lives ?? 3,
+            isEliminated: p.isEliminated === true,
+            hasAnswered: p.hasAnswered === true,
+            gameRunning: p.gameRunning === true,
+            settings: p.settings || undefined,
+          });
+        }
+      }
+      // Always include self if not in presence state yet
+      if (this.playerId && !players.find((p) => p.id === this.playerId)) {
+        players.push({
+          id: this.playerId,
+          nickname: 'Player',
+          character: {} as any,
+          isHost: false,
+          score: 0,
+          lives: 3,
+          isEliminated: false,
+          hasAnswered: false,
+        });
+      }
+      this.callbacks.onPlayersSync?.(players);
     });
 
     // Presence leave handler
